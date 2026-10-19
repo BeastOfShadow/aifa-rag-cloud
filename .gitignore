@@ -1,0 +1,10 @@
+data/
+.venv/
+__pycache__/
+.DS_Store
+.ipynb_checkpoints/
+*.tfstate*
+.terraform/
+clouds.yaml
+*openrc*
+.env
