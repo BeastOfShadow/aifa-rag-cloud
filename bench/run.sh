@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 # Run strumentato su un campione: tempo per fase + utilizzo risorse.
-# Uso: CONFIG=local-mps bench/run.sh samples/n500 [fasi...]   (default: s3 s4)
-# Env: WORKERS (s3), DEVICE / EMBED_BATCH (s4). Output: results/<CONFIG>/<run_id>/
+# Ogni run parte dal campione pulito (solo s1+s2): s4 ha bisogno di s3 nello stesso run.
+#
+#   CONFIG=local-cpu WORKERS=4 bench/run.sh samples/n500 s3     # solo s3, scaling worker
+#   CONFIG=local-cpu DEVICE=cpu bench/run.sh samples/n500        # s3 + s4 su CPU
+#   CONFIG=local-mps DEVICE=mps bench/run.sh samples/n500        # s3 + s4 su GPU Apple
+#   CONFIG=cloud-gpu EMBED_BATCH=256 bench/run.sh samples/n500   # s3 + s4 su H100
+#
+# Env: WORKERS (s3, default tutti i core), DEVICE / EMBED_BATCH (s4, default auto / 64).
+# Output: results/<CONFIG>/<run_id>/ (phases.csv, log per fase, gpu.csv / vmstat.txt)
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CONFIG="${CONFIG:?es. CONFIG=local-mps}"
