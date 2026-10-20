@@ -8,3 +8,5 @@ __pycache__/
 clouds.yaml
 *openrc*
 .env
+samples/
+results/*/*/data/

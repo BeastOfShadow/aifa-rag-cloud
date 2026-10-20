@@ -10,7 +10,7 @@ from pathlib import Path
 # ---- percorsi ----
 ROOT = Path(__file__).resolve().parent.parent          # farmaci/
 DATASETS = ROOT / "datasets"
-DATA = ROOT / "data"
+DATA = Path(os.environ.get("DATA_DIR", ROOT / "data"))  # override per pilot/bench: non tocca data/
 PDF_DIR = DATA / "pdf"
 MD_DIR = DATA / "md"
 DB_PATH = DATA / "farmaci.sqlite"

@@ -20,7 +20,9 @@ from config import (DB_PATH, PDF_DIR, MD_DIR, PILOT_N, HTTP_TIMEOUT,
 def pilot_docs(limit=PILOT_N) -> list[tuple[str, str, str]]:
     """Ritorna [(cod_farmaco, tipo, url)] per FI e RCP dei primi `limit` farmaci."""
     con = sqlite3.connect(DB_PATH)
-    q = "SELECT DISTINCT COD_FARMACO, LINK_FI, LINK_RCP FROM conf WHERE COD_FARMACO IS NOT NULL"
+    # ORDER BY: stesso campione a ogni run (benchmark confrontabili)
+    q = ("SELECT DISTINCT COD_FARMACO, LINK_FI, LINK_RCP FROM conf WHERE COD_FARMACO IS NOT NULL"
+         " ORDER BY COD_FARMACO, LINK_FI, LINK_RCP")
     if limit:
         q += f" LIMIT {int(limit)}"
     rows = con.execute(q).fetchall()

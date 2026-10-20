@@ -15,16 +15,17 @@ from pathlib import Path
 import pymupdf
 import pymupdf4llm
 from tqdm import tqdm
-from config import DB_PATH, MD_DIR, KEEP_PDF, OCR_MIN_CHARS_PER_PAGE
+from config import DB_PATH, PDF_DIR, MD_DIR, KEEP_PDF, OCR_MIN_CHARS_PER_PAGE
 
 
 def _convert_one(args):
     """Worker: un PDF -> md. Ritorna (farm, tipo, md_path, md_chars, scanned, stato)."""
-    farm, tipo, path = args
+    farm, tipo = args
+    path = str(PDF_DIR / f"{farm}_{tipo}.pdf")   # non il path del manifest: il campione cambia macchina
     md_path = MD_DIR / f"{farm}_{tipo}.md"
     if md_path.exists():
         return (farm, tipo, None, None, None, "skip")
-    if not path or not Path(path).exists():
+    if not Path(path).exists():
         return (farm, tipo, None, None, None, "nopdf")
     try:
         doc = pymupdf.open(path)
@@ -42,7 +43,7 @@ def _convert_one(args):
 
 
 def convert_all(workers=None):
-    workers = workers or os.cpu_count()
+    workers = workers or int(os.environ.get("WORKERS", "0")) or os.cpu_count()
     con = sqlite3.connect(DB_PATH)
     for col, typ in (("md_path", "TEXT"), ("md_chars", "INTEGER"), ("scanned", "INTEGER")):
         try:
@@ -52,7 +53,7 @@ def convert_all(workers=None):
     con.commit()
 
     rows = con.execute(
-        "SELECT cod_farmaco, tipo, path FROM docs WHERE status IN ('ok','cached')").fetchall()
+        "SELECT cod_farmaco, tipo FROM docs WHERE status IN ('ok','cached')").fetchall()
     todo = [r for r in rows if not (MD_DIR / f"{r[0]}_{r[1]}.md").exists()]
     print(f"da convertire: {len(todo)} (gia' fatti {len(rows) - len(todo)}) | workers={workers}")
 
