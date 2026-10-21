@@ -1,0 +1,2 @@
+run_id,config,commit,host,cpus,workers,device,embed_batch,phase,start,end,seconds
+20261020T205231,local-cpu,1d7fca1-dirty,Mac,10,4,auto,64,s3,1792522351,1792523040,689

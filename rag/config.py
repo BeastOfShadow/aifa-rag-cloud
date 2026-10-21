@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 
 # ---- percorsi ----
-ROOT = Path(__file__).resolve().parent.parent          # farmaci/
+ROOT = Path(__file__).resolve().parent.parent          # aifa-rag-cloud/
 DATASETS = ROOT / "datasets"
 DATA = Path(os.environ.get("DATA_DIR", ROOT / "data"))  # override per pilot/bench: non tocca data/
 PDF_DIR = DATA / "pdf"
