@@ -20,6 +20,7 @@ OUT="$ROOT/results/$CONFIG/$RUN_ID"
 
 # dati del run isolati: sqlite copiato (s3 lo modifica), pdf in sola lettura via symlink
 export DATA_DIR="$OUT/data" KEEP_PDF=1
+export TQDM_MININTERVAL=30   # barra di avanzamento ogni 30 s: log piccoli (prima fino a 19 MB)
 mkdir -p "$DATA_DIR"
 cp "$SAMPLE/farmaci.sqlite" "$DATA_DIR/"
 ln -s "$SAMPLE/pdf" "$DATA_DIR/pdf"

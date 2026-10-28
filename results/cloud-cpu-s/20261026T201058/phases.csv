@@ -1,0 +1,2 @@
+run_id,config,commit,host,cpus,workers,device,embed_batch,phase,start,end,seconds
+20261026T201058,cloud-cpu-s,74f8d5b,aifa-cpu-s,8,8,auto,64,s3,1793045459,1793046054,595

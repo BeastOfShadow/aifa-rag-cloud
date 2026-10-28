@@ -1,0 +1,2 @@
+run_id,config,commit,host,cpus,workers,device,embed_batch,phase,start,end,seconds
+20261027T210046,local-cpu-ocr,09cbc52-dirty,Mac,10,10,auto,64,s3,1793131246,1793132390,1144

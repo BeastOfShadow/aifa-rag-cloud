@@ -5,9 +5,9 @@ cloud-gpu,Azure,NC40ads_H100_v5 (40 vCPU 320GiB 1xH100 NVL 94GB),9.7416,0,"listi
 cloud-gpu,AWS,p5.4xlarge (16 vCPU 256GiB 1xH100 80GB),7.9946,0,"7,3616 $/h eu-north-1 Stoccolma, BCE 1,1234 + IVA 22%; aws.amazon.com/ec2/pricing/on-demand",2026-10-21
 cloud-gpu,Lambda,1x H100 PCIe (26 vCPU 225GiB 80GB),3.5729,0,"3,29 $/h, regione n.d., BCE 1,1234 + IVA 22%; lambda.ai/pricing",2026-10-21
 cloud-gpu,RunPod,H100 NVL Secure Cloud (16 vCPU 94GB),3.4643,0,"3,19 $/h, pod non VM, BCE 1,1234 + IVA 22%; runpod.io/pricing",2026-10-21
-cloud-cpu-l,Azure,F48s_v2 (48 vCPU 96GiB),2.4993,0,"listino EUR nativo 2,0486 €/h + IVA 22%, Germany West Central; prices.azure.com/api/retail/prices",2026-10-21
-cloud-cpu-l,AWS,c7i.12xlarge (48 vCPU 96GiB),2.6546,0,"2,4444 $/h eu-central-1 Francoforte, BCE 1,1234 + IVA 22%; aws.amazon.com/ec2/pricing/on-demand",2026-10-21
-cloud-cpu-l,GCP,c3-standard-44 (44 vCPU 176GiB),2.8419,0,"2,61687 $/h europe-west3 Francoforte, BCE 1,1234 + IVA 22%; cloud.google.com/products/compute/pricing/general-purpose",2026-10-21
+cloud-cpu-l,Azure,F16s_v2 (16 vCPU 32GiB),0.8331,0,"listino EUR nativo 0,6829 €/h + IVA 22%, Germany West Central; prices.azure.com/api/retail/prices",2026-10-27
+cloud-cpu-l,AWS,c7i.4xlarge (16 vCPU 32GiB),0.8849,0,"0,8148 $/h eu-central-1 Francoforte, BCE 1,1234 + IVA 22%; aws.amazon.com/ec2/pricing/on-demand",2026-10-27
+cloud-cpu-l,GCP,c4-standard-16 (16 vCPU 60GiB),1.0132,0,"0,9330024 $/h europe-west3 Francoforte, BCE 1,1234 + IVA 22%; cloud.google.com/products/compute/pricing/general-purpose",2026-10-27
 cloud-cpu-s,Azure,F8s_v2 (8 vCPU 16GiB),0.4165,0,"listino EUR nativo 0,3414 €/h + IVA 22%, Germany West Central; prices.azure.com/api/retail/prices",2026-10-21
 cloud-cpu-s,AWS,c7i.2xlarge (8 vCPU 16GiB),0.4424,0,"0,4074 $/h eu-central-1 Francoforte, BCE 1,1234 + IVA 22%; aws.amazon.com/ec2/pricing/on-demand",2026-10-21
 cloud-cpu-s,GCP,c3-standard-8 (8 vCPU 32GiB),0.5167,0,"0,47579 $/h europe-west3 Francoforte, BCE 1,1234 + IVA 22%; cloud.google.com/products/compute/pricing/general-purpose",2026-10-21
