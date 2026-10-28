@@ -20,7 +20,7 @@ OUT="$ROOT/results/$CONFIG/$RUN_ID"
 
 # dati del run isolati: sqlite copiato (s3 lo modifica), pdf in sola lettura via symlink
 export DATA_DIR="$OUT/data" KEEP_PDF=1
-export TQDM_MININTERVAL=30   # barra di avanzamento ogni 30 s: log piccoli (prima fino a 19 MB)
+export TQDM_MININTERVAL=30   # barra di avanzamento ogni 30 s invece di 10 al secondo
 mkdir -p "$DATA_DIR"
 cp "$SAMPLE/farmaci.sqlite" "$DATA_DIR/"
 ln -s "$SAMPLE/pdf" "$DATA_DIR/pdf"
@@ -38,7 +38,8 @@ echo "run_id,config,commit,host,cpus,workers,device,embed_batch,phase,start,end,
 cd "$ROOT/rag"
 for p in $PHASES; do
   t0=$(date +%s)
-  "$PY" "$p"_*.py 2>&1 | tee "$OUT/$p.log"
+  # tr: pymupdf stampa NUL prima di ogni "Document parser messages", crescenti per doc (19 MB con 1 worker)
+  "$PY" "$p"_*.py 2>&1 | tr -d '\000' | tee "$OUT/$p.log"
   t1=$(date +%s)
   echo "$RUN_ID,$CONFIG,$COMMIT,$(hostname -s),$(getconf _NPROCESSORS_ONLN),${WORKERS:-all},${DEVICE:-auto},${EMBED_BATCH:-64},$p,$t0,$t1,$((t1-t0))" >> "$OUT/phases.csv"
 done

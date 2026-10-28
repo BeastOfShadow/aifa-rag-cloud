@@ -1,0 +1,2 @@
+run_id,config,commit,host,cpus,workers,device,embed_batch,phase,start,end,seconds
+20261028T173023,cloud-gpu,5830751,aifa-gpu,48,8,auto,64,s3,1793208623,1793208962,339
