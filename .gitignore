@@ -10,3 +10,7 @@ clouds.yaml
 .env
 samples/
 results/*/*/data/
+
+# file personali/temporanei nella root
+/*.pdf
+/*.log
