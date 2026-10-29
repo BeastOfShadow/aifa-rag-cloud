@@ -1,4 +1,6 @@
 run_id,config,sample,n_docs,n_chunks,commit,host,cpus,workers,device,embed_batch,phase,seconds
+20261028T203931,cloud-gpu-full,full,17984,807495,5830751,aifa-gpu,48,all,auto,64,s3,2109
+20261028T203931,cloud-gpu-full,full,17984,807495,5830751,aifa-gpu,48,all,auto,64,s4,9833
 20261020T213649,local-cpu,n500,972,,1d7fca1-dirty,Mac,10,8,auto,64,s3,984
 20261020T193553,local-cpu,n500,972,,1d7fca1-dirty,Mac,10,1,auto,64,s3,1134
 20261020T215313,local-cpu,n500,972,,1d7fca1-dirty,Mac,10,10,auto,64,s3,1071
@@ -25,12 +27,20 @@ run_id,config,sample,n_docs,n_chunks,commit,host,cpus,workers,device,embed_batch
 20261028T161456,cloud-gpu,n500,972,31365,5830751,aifa-gpu,48,all,auto,256,s3,89
 20261028T161456,cloud-gpu,n500,972,31365,5830751,aifa-gpu,48,all,auto,256,s4,409
 20261028T175207,cloud-gpu,n500,972,,5830751,aifa-gpu,48,48,auto,64,s3,90
+20261029T000502,cloud-gpu,n500,972,31365,5830751,aifa-gpu,48,all,auto,64,s3,91
+20261029T000502,cloud-gpu,n500,972,31365,5830751,aifa-gpu,48,all,auto,64,s4,281
 20261028T163749,cloud-gpu,n500,972,,5830751,aifa-gpu,48,1,auto,64,s3,2478
 20261028T162315,cloud-gpu,n500,972,31365,5830751,aifa-gpu,48,all,auto,256,s3,90
 20261028T162315,cloud-gpu,n500,972,31365,5830751,aifa-gpu,48,all,auto,256,s4,410
 20261028T173602,cloud-gpu,n500,972,,5830751,aifa-gpu,48,16,auto,64,s3,180
+20261029T002321,cloud-gpu,n500,972,31365,5830751,aifa-gpu,48,all,auto,128,s3,90
+20261029T002321,cloud-gpu,n500,972,31365,5830751,aifa-gpu,48,all,auto,128,s4,315
+20261029T001728,cloud-gpu,n500,972,31365,5830751,aifa-gpu,48,all,auto,32,s3,91
+20261029T001728,cloud-gpu,n500,972,31365,5830751,aifa-gpu,48,all,auto,32,s4,262
 20261028T174203,cloud-gpu,n500,972,,5830751,aifa-gpu,48,16,auto,64,s3,181
 20261028T174656,cloud-gpu,n500,972,,5830751,aifa-gpu,48,32,auto,64,s3,108
+20261029T001114,cloud-gpu,n500,972,31365,5830751,aifa-gpu,48,all,auto,64,s3,92
+20261029T001114,cloud-gpu,n500,972,31365,5830751,aifa-gpu,48,all,auto,64,s4,282
 20261028T173902,cloud-gpu,n500,972,,5830751,aifa-gpu,48,16,auto,64,s3,181
 20261028T163136,cloud-gpu,n500,972,31365,5830751,aifa-gpu,48,all,auto,64,s3,91
 20261028T163136,cloud-gpu,n500,972,31365,5830751,aifa-gpu,48,all,auto,64,s4,281

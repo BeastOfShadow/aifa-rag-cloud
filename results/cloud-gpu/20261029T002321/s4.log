@@ -1,0 +1,9 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+documenti md: 972
+carico modello BAAI/bge-m3 su device=cuda (prima volta scarica ~2GB)...
+Loading weights:   0%|          | 0/391 [00:00<?, ?it/s]Loading weights: 100%|██████████| 391/391 [00:00<00:00, 25159.52it/s]
+chunking:   0%|          | 0/972 [00:00<?, ?doc/s]chunking: 100%|██████████| 972/972 [00:01<00:00, 608.55doc/s]
+chunk totali: 31365
+embed+index:   0%|          | 0/123 [00:00<?, ?batch/s]embed+index:  11%|█         | 13/123 [00:31<04:22,  2.39s/batch]embed+index:  11%|█         | 13/123 [00:45<04:22,  2.39s/batch]embed+index:  20%|██        | 25/123 [01:01<04:02,  2.48s/batch]embed+index:  20%|██        | 25/123 [01:15<04:02,  2.48s/batch]embed+index:  30%|███       | 37/123 [01:33<03:40,  2.56s/batch]embed+index:  30%|███       | 37/123 [01:45<03:40,  2.56s/batch]embed+index:  40%|███▉      | 49/123 [02:04<03:08,  2.55s/batch]embed+index:  40%|███▉      | 49/123 [02:15<03:08,  2.55s/batch]embed+index:  50%|████▉     | 61/123 [02:35<02:39,  2.57s/batch]embed+index:  50%|████▉     | 61/123 [02:45<02:39,  2.57s/batch]embed+index:  60%|██████    | 74/123 [03:05<02:01,  2.48s/batch]embed+index:  60%|██████    | 74/123 [03:15<02:01,  2.48s/batch]embed+index:  71%|███████   | 87/123 [03:37<01:28,  2.47s/batch]embed+index:  71%|███████   | 87/123 [03:48<01:28,  2.47s/batch]embed+index:  81%|████████▏ | 100/123 [04:08<00:56,  2.45s/batch]embed+index:  81%|████████▏ | 100/123 [04:18<00:56,  2.45s/batch]embed+index:  92%|█████████▏| 113/123 [04:38<00:24,  2.42s/batch]embed+index:  92%|█████████▏| 113/123 [04:56<00:24,  2.42s/batch]embed+index: 100%|██████████| 123/123 [05:03<00:00,  2.46s/batch]
+
+Chroma pronto: /home/cc/aifa-rag-cloud/results/cloud-gpu/20261029T002321/data/chroma | collection 'stampati' count=31365
