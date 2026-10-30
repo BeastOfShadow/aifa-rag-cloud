@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite it and link to the repository or to https://www.simonenegro.com."
+title: "aifa-rag-cloud: a RAG pipeline over AIFA drug leaflets, with infrastructure as code and a local vs cloud cost benchmark"
+type: software
+authors:
+  - family-names: Negro
+    given-names: Simone
+    website: "https://www.simonenegro.com"
+repository-code: "https://github.com/BeastOfShadow/aifa-rag-cloud"
+url: "https://www.simonenegro.com"
+license: Apache-2.0
+date-released: 2026-10-30

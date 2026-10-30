@@ -270,7 +270,7 @@ Una VM appena creata contiene solo il sistema operativo. Prima di poter effettua
 
 #### 5.3.1 Codice
 
-Il repository è privato. Nella procedura manuale a ogni VM è stata associata una *deploy key* GitHub in sola lettura, poi rimossa a fine lavoro, e il codice è stato clonato con `git clone` (2 s). La procedura automatica (§5.4) usa invece un `git bundle`: il commit corrente viene impacchettato in locale (9,8 MB) e inviato via SSH, così sulla VM non serve alcuna credenziale e il codice corrisponde esattamente al commit registrato in `phases.csv`.
+Il codice è pubblico su GitHub ([BeastOfShadow/aifa-rag-cloud](https://github.com/BeastOfShadow/aifa-rag-cloud)), ma durante le misure il repository era privato. Per questo nella procedura manuale a ogni VM è stata associata una *deploy key* GitHub in sola lettura, poi rimossa a fine lavoro, e il codice è stato clonato con `git clone` (2 s). La procedura automatica (§5.4) usa invece un `git bundle`: il commit corrente viene impacchettato in locale (9,8 MB) e inviato via SSH, così sulla VM non serve alcuna credenziale e il codice corrisponde esattamente al commit registrato in `phases.csv`.
 
 #### 5.3.2 Campione
 

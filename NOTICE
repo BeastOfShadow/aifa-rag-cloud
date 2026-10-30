@@ -1,0 +1,10 @@
+aifa-rag-cloud
+Copyright 2026 Simone Negro
+
+This product includes software and documentation developed by Simone Negro
+(https://www.simonenegro.com).
+Source: https://github.com/BeastOfShadow/aifa-rag-cloud
+
+The files in datasets/ and the documents downloaded by the pipeline are open data
+of the Agenzia Italiana del Farmaco (AIFA), https://www.aifa.gov.it,
+released under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/).

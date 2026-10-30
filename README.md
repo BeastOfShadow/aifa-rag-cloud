@@ -142,4 +142,14 @@ make fetch down                # copy results to results/<config>/, destroy VM a
 - [APPROFONDIMENTO_IAC.md](APPROFONDIMENTO_IAC.md) — the original plan of the cloud extension.
 - [LAVORO_SVOLTO.md](LAVORO_SVOLTO.md) — log of the first version (baseline v0).
 
-Data: AIFA open data, [aifa.gov.it/liste-dei-farmaci](https://www.aifa.gov.it/it/liste-dei-farmaci).
+## License
+
+Code and documentation: [Apache 2.0](LICENSE). You can use, modify and redistribute them, also
+commercially, as long as you keep the attribution in [NOTICE](NOTICE) in what you distribute.
+If you use this work in a project, an article or a talk, please credit it with a link to this
+repository or to [simonenegro.com](https://www.simonenegro.com); [CITATION.cff](CITATION.cff) has the
+details (GitHub shows it as "Cite this repository").
+
+The CSV files in `datasets/` and the documents the pipeline downloads are AIFA open data
+([aifa.gov.it/liste-dei-farmaci](https://www.aifa.gov.it/it/liste-dei-farmaci)), released under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/): source, Agenzia Italiana del Farmaco.
