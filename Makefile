@@ -3,6 +3,8 @@
 #   make fetch down              copy results back, destroy VM and lease
 # Lease = OpenStack CLI (Blazar is not covered by the Terraform provider), VM = Terraform (infra/).
 # Every target except bench/ssh appends its wall-clock time to $(TIMES): time-to-ready = lease + up.
+# Each lease has its own Terraform workspace (TF_WORKSPACE = LEASE_NAME), so VMs can run in parallel:
+# every command for a VM must carry its LEASE_NAME.
 #
 # Split configuration (conversion on a CPU VM, embedding on the H100), one VM after the other:
 #   make lease up deploy bench CONFIG=split-cpu LEASE_NAME=aifa-split-cpu
@@ -32,8 +34,10 @@ OPENSTACK      = openstack --os-cloud $(CLOUD_NAME)
 TIMES          = results/infra_times.csv
 # Throwaway VMs get a new host key every time and floating IPs get reused: skip known_hosts
 SSH            = ssh -i $(SSH_KEY) -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10
+# Terraform on this lease's workspace
+TF             = TF_WORKSPACE=$(LEASE_NAME) terraform -chdir=infra
 # Floating IP from the Terraform state, looked up only when a recipe uses it
-REMOTE         = cc@$(shell terraform -chdir=infra output -raw ip 2>/dev/null)
+REMOTE         = cc@$(shell $(TF) output -raw ip 2>/dev/null)
 # Appends "<target>,start,end,seconds"; the recipe must set t0 first
 LOG_TIME       = t1=$$(date +%s) && { test -f $(TIMES) || echo "target,start,end,seconds" > $(TIMES); } && echo "$@,$$t0,$$t1,$$((t1-t0))" >> $(TIMES)
 
@@ -59,9 +63,11 @@ up:
 	RES=$$($(OPENSTACK) reservation lease show $(LEASE_NAME) -f json -c reservations | jq -r '.reservations | fromjson | .id') && \
 	{ test -n "$$RES" || { echo "no lease $(LEASE_NAME): run make lease first"; exit 1; }; } && \
 	terraform -chdir=infra init -input=false > /dev/null && \
-	terraform -chdir=infra apply -auto-approve -var reservation_id=$$RES -var name=$(LEASE_NAME) \
+	{ terraform -chdir=infra workspace list | grep -qw "$(LEASE_NAME)" || \
+	  { terraform -chdir=infra workspace new $(LEASE_NAME) && terraform -chdir=infra workspace select default; } > /dev/null; } && \
+	$(TF) apply -auto-approve -var reservation_id=$$RES -var name=$(LEASE_NAME) \
 	  -var image=$(IMAGE) -var volume_gb=$(VOLUME_GB) && \
-	IP=$$(terraform -chdir=infra output -raw ip) && \
+	IP=$$($(TF) output -raw ip) && \
 	until $(SSH) cc@$$IP true 2>/dev/null; do \
 	  echo "waiting for ssh on $$IP"; sleep 10; \
 	done && \
@@ -126,7 +132,8 @@ push-md:
 # The floating IP is released by Terraform, unlike the manual procedure.
 down:
 	@t0=$$(date +%s) && \
-	terraform -chdir=infra destroy -auto-approve -var reservation_id=none -var name=$(LEASE_NAME) && \
+	$(TF) destroy -auto-approve -var reservation_id=none -var name=$(LEASE_NAME) && \
+	terraform -chdir=infra workspace delete $(LEASE_NAME) > /dev/null && \
 	{ $(OPENSTACK) reservation lease delete $(LEASE_NAME) || echo "lease $(LEASE_NAME) already gone"; } && \
 	$(LOG_TIME)
 
