@@ -27,6 +27,6 @@ for percorso in percorsi:
         df["n_chunks"] = int(m.group(1)) if m else None
         frames.append(df)
 
-all_df = pd.concat(frames)[COLS]                # unisce i 17 df e tiene solo queste colonne, in quest'ordine
-all_df.to_csv(RESULTS / "all.csv", index=False) # index=False: senza la colonna 0,1,2... di pandas
+all_df = pd.concat(frames)[COLS]
+all_df.to_csv(RESULTS / "all.csv", index=False)
 print(f"{len(frames)} run, {len(all_df)} righe -> {RESULTS / 'all.csv'}")

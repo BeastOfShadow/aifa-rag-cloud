@@ -78,3 +78,15 @@ run_id,config,sample,n_docs,n_chunks,commit,host,cpus,workers,device,embed_batch
 20261027T204308,local-cpu-ocr,n500,972,,09cbc52-dirty,Mac,10,8,auto,64,s3,1058
 20261027T180422,local-cpu-ocr,n500,972,,09cbc52-dirty,Mac,10,1,auto,64,s3,1282
 20261027T190946,local-cpu-ocr,n500,972,,09cbc52-dirty,Mac,10,4,auto,64,s3,1128
+20261029T185029,cloud-cpu-l,n500,972,,3779f10,aifa-cpu-l,16,4,auto,64,s3,1153
+20261029T165850,cloud-cpu-l,n500,972,,3779f10,aifa-cpu-l,16,1,auto,64,s3,4387
+20261029T190942,cloud-cpu-l,n500,972,,3779f10,aifa-cpu-l,16,8,auto,64,s3,598
+20261029T192936,cloud-cpu-l,n500,972,,3779f10,aifa-cpu-l,16,8,auto,64,s3,597
+20261029T181158,cloud-cpu-l,n500,972,,3779f10,aifa-cpu-l,16,4,auto,64,s3,1156
+20261029T195532,cloud-cpu-l,n500,972,31365,3779f10,aifa-cpu-l,16,all,cpu,64,s3,318
+20261029T195532,cloud-cpu-l,n500,972,31365,3779f10,aifa-cpu-l,16,all,cpu,64,s4,14338
+20261029T183115,cloud-cpu-l,n500,972,,3779f10,aifa-cpu-l,16,4,auto,64,s3,1154
+20261029T195013,cloud-cpu-l,n500,972,,3779f10,aifa-cpu-l,16,16,auto,64,s3,318
+20261029T193934,cloud-cpu-l,n500,972,,3779f10,aifa-cpu-l,16,16,auto,64,s3,319
+20261029T194454,cloud-cpu-l,n500,972,,3779f10,aifa-cpu-l,16,16,auto,64,s3,319
+20261029T191941,cloud-cpu-l,n500,972,,3779f10,aifa-cpu-l,16,8,auto,64,s3,595
