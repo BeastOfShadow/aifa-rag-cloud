@@ -35,7 +35,7 @@ fi
 if [ "$(uname)" = Linux ]; then vmstat -n -t 1 > "$OUT/vmstat.txt" & fi
 trap 'kill $(jobs -p) 2>/dev/null || true' EXIT
 
-COMMIT="$(git -C "$ROOT" rev-parse --short HEAD)$(git -C "$ROOT" diff --quiet || echo -dirty)"
+COMMIT="$(git -C "$ROOT" rev-parse --short HEAD)$(git -C "$ROOT" diff --quiet -- . ":(exclude)results" || echo -dirty)"   # i risultati non sporcano il commit
 echo "run_id,config,commit,host,cpus,workers,device,embed_batch,phase,start,end,seconds" > "$OUT/phases.csv"
 cd "$ROOT/rag"
 for p in $PHASES; do
