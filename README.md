@@ -6,8 +6,9 @@ Retrieval-Augmented Generation over the package leaflets (FI) and summaries of p
 
 University project for the Cloud Computing course of Prof. Massimo Canonico (Università del Piemonte
 Orientale). The cloud extension automates the infrastructure as code and compares time and cost of
-local vs cloud, CPU vs GPU configurations. The full write-up, in Italian, is
-[docs/RELAZIONE.md](docs/RELAZIONE.md).
+local vs cloud, CPU vs GPU configurations. The full report, in Italian, is
+[docs/RELAZIONE.md](docs/RELAZIONE.md); the case study in English is
+[What It Actually Costs to Run a RAG Pipeline](https://www.simonenegro.com/blog/rag-pipeline-cost-local-vs-cloud-gpu).
 
 ## Results at a glance
 
@@ -54,12 +55,13 @@ credentials, Terraform state.
 ### Setup
 
 ```bash
-python3 -m venv .venv && .venv/bin/pip install -r rag/requirements.txt
+uv venv --python 3.13.4 .venv && uv pip install --python .venv -r rag/requirements.txt -c rag/constraints.txt
 brew install tesseract tesseract-lang      # macOS; Debian/Ubuntu: apt install tesseract-ocr tesseract-ocr-ita
 ```
 
-Python 3.13 locally (3.12 on the Chameleon images). On a GPU machine install the CUDA build of PyTorch
-first, as `chameleon/bootstrap.sh` does.
+Every machine uses the same Python (3.13.4, installed by [uv](https://docs.astral.sh/uv/)) and the same
+library versions: `requirements.txt` pins the direct dependencies, `constraints.txt` the indirect ones.
+On a GPU machine install the CUDA build of the pinned PyTorch first, as `chameleon/bootstrap.sh` does.
 
 ### Run
 
@@ -74,8 +76,7 @@ export PILOT_N=100                          # number of drugs; 0 = all 12,599 (~
 ../.venv/bin/streamlit run ui.py --server.fileWatcherType none
 ```
 
-s5 answers with Claude by default: it needs `pip install anthropic` (not in `requirements.txt`) and
-`ANTHROPIC_API_KEY`. With `LLM_PROVIDER=ollama` it uses a local Ollama model instead. Only the question
+s5 answers with Claude by default and needs `ANTHROPIC_API_KEY`. With `LLM_PROVIDER=ollama` it uses a local Ollama model instead. Only the question
 and the retrieved chunks leave the machine.
 
 | Variable | Default | Meaning |

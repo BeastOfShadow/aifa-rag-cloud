@@ -24,6 +24,8 @@ export TQDM_MININTERVAL=30   # barra di avanzamento ogni 30 s invece di 10 al se
 mkdir -p "$DATA_DIR"
 cp "$SAMPLE/farmaci.sqlite" "$DATA_DIR/"
 ln -s "$SAMPLE/pdf" "$DATA_DIR/pdf"
+# Markdown già convertiti da un'altra macchina (configurazione split): s4 senza s3
+if [ -d "$SAMPLE/md" ]; then ln -s "$SAMPLE/md" "$DATA_DIR/md"; fi
 
 # monitor risorse in background, chiusi all'uscita
 if command -v nvidia-smi >/dev/null; then

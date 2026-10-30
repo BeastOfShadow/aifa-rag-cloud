@@ -13,7 +13,7 @@ from pathlib import Path
 import chromadb
 from tqdm import tqdm
 from sentence_transformers import SentenceTransformer
-from config import (DB_PATH, CHROMA_DIR, CHROMA_COLLECTION, EMBED_MODEL,
+from config import (DB_PATH, MD_DIR, CHROMA_DIR, CHROMA_COLLECTION, EMBED_MODEL,
                     EMBED_BATCH, CHUNK_MAX_CHARS, CHUNK_OVERLAP, pick_device)
 
 # Sezioni AIFA = marker grassetto numerato INLINE: **4.3 Controindicazioni**, **7. TITOLARE...**
@@ -106,7 +106,8 @@ def build():
 
     ids, texts, embed_texts, metas = [], [], [], []
     for farm, tipo, md_path in tqdm(docs, desc="chunking", unit="doc"):
-        md = Path(md_path).read_text(encoding="utf-8")
+        # come s3: il path nel db è della macchina che ha convertito, che può essere un'altra VM
+        md = (MD_DIR / Path(md_path).name).read_text(encoding="utf-8")
         fm = meta.get(farm, {})
         den = fm.get("denominazione", "")
         tipo_full = "Foglio Illustrativo" if tipo == "FI" else "Riassunto Caratteristiche Prodotto"

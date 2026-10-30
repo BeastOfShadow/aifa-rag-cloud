@@ -23,6 +23,16 @@ variable "name" {
 
 variable "reservation_id" {}
 
+# OS image: CC-Ubuntu24.04 for CPU VMs, CC-Ubuntu24.04-CUDA for the H100
+variable "image" {
+  default = "CC-Ubuntu24.04"
+}
+
+# Extra disk in GB, 0 = none. The H100 root disk has ~9 GB free after CUDA and PyTorch
+variable "volume_gb" {
+  default = 0
+}
+
 # Create the ssh remote access to the chameleon VM
 resource "openstack_networking_secgroup_v2" "ssh" {
   name        = "${var.name}-ssh"
@@ -54,7 +64,7 @@ resource "openstack_networking_port_v2" "vm" {
 
 resource "openstack_compute_instance_v2" "vm" {
   name       = var.name
-  image_name = "CC-Ubuntu24.04"
+  image_name = var.image
   flavor_id  = var.reservation_id
   key_pair   = "farmaci-h100"
 
@@ -67,6 +77,19 @@ resource "openstack_networking_floatingip_v2" "ip" {
   pool        = "public"
   description = var.name
   port_id     = openstack_networking_port_v2.vm.id
+}
+
+# Optional data volume, attached as /dev/vdb and destroyed with the VM (by hand it was forgotten)
+resource "openstack_blockstorage_volume_v3" "data" {
+  count = var.volume_gb > 0 ? 1 : 0
+  name  = "${var.name}-data"
+  size  = var.volume_gb
+}
+
+resource "openstack_compute_volume_attach_v2" "data" {
+  count       = var.volume_gb > 0 ? 1 : 0
+  instance_id = openstack_compute_instance_v2.vm.id
+  volume_id   = openstack_blockstorage_volume_v3.data[0].id
 }
 
 output "ip" {

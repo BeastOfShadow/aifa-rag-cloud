@@ -1,5 +1,7 @@
 # aifa-rag-cloud - Python 3.13
-# torch: su GPU installare prima la build CUDA (cu124), vedi chameleon/bootstrap.sh
+# torch: stessa versione ovunque (2.14.1 è l'ultima con build CPU, CUDA 12.6 e macOS);
+# su GPU installare prima la build CUDA, vedi chameleon/bootstrap.sh
+torch==2.14.1
 pandas==3.0.3
 httpx==0.28.1
 pymupdf4llm==1.28.0
@@ -9,4 +11,5 @@ chromadb==1.5.9
 streamlit==1.59.1
 matplotlib==3.11.0
 ipykernel==7.3.0
+anthropic==2.3.0           # s5 con LLM_PROVIDER=claude
 # sqlite3 = stdlib

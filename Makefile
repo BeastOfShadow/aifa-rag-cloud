@@ -3,6 +3,13 @@
 #   make fetch down              copy results back, destroy VM and lease
 # Lease = OpenStack CLI (Blazar is not covered by the Terraform provider), VM = Terraform (infra/).
 # Every target except bench/ssh appends its wall-clock time to $(TIMES): time-to-ready = lease + up.
+#
+# Split configuration (conversion on a CPU VM, embedding on the H100), one VM after the other:
+#   make lease up deploy bench CONFIG=split-cpu LEASE_NAME=aifa-split-cpu
+#   make fetch fetch-md down CONFIG=split-cpu LEASE_NAME=aifa-split-cpu
+#   make lease up deploy push-md bench CONFIG=split-gpu SPLIT_FROM=split-cpu LEASE_NAME=aifa-split-gpu \
+#        FLAVOR_ID=<h100 flavor id> IMAGE=CC-Ubuntu24.04-CUDA VOLUME_GB=30
+#   make fetch down CONFIG=split-gpu LEASE_NAME=aifa-split-gpu
 
 CLOUD_NAME     = chameleon
 LEASE_NAME     = aifa-cpu-l
@@ -12,6 +19,11 @@ FLAVOR_ID      = 6
 LEASE_DURATION = 10
 CONFIG         = cloud-cpu-l
 PLAN           = bench/plan_$(CONFIG).sh
+IMAGE          = CC-Ubuntu24.04
+# Extra disk mounted on /mnt/vol, 0 = none
+VOLUME_GB      = 0
+# Split configuration: config whose fetched Markdown push-md sends to this VM
+SPLIT_FROM     = split-cpu
 SSH_KEY        = $(HOME)/.ssh/chameleon_farmaci
 SAMPLE         = samples/n500.tar.gz
 SAMPLE_DIR     = $(SAMPLE:.tar.gz=)
@@ -25,7 +37,7 @@ REMOTE         = cc@$(shell terraform -chdir=infra output -raw ip 2>/dev/null)
 # Appends "<target>,start,end,seconds"; the recipe must set t0 first
 LOG_TIME       = t1=$$(date +%s) && { test -f $(TIMES) || echo "target,start,end,seconds" > $(TIMES); } && echo "$@,$$t0,$$t1,$$((t1-t0))" >> $(TIMES)
 
-.PHONY: lease up deploy bench fetch down ssh
+.PHONY: lease up deploy bench fetch fetch-md push-md down ssh
 
 # Reserve the flavor and wait until the lease is ACTIVE.
 # date -v is BSD/macOS syntax (GNU/Linux: date -d "+N hours")
@@ -47,7 +59,8 @@ up:
 	RES=$$($(OPENSTACK) reservation lease show $(LEASE_NAME) -f json -c reservations | jq -r '.reservations | fromjson | .id') && \
 	{ test -n "$$RES" || { echo "no lease $(LEASE_NAME): run make lease first"; exit 1; }; } && \
 	terraform -chdir=infra init -input=false > /dev/null && \
-	terraform -chdir=infra apply -auto-approve -var reservation_id=$$RES -var name=$(LEASE_NAME) && \
+	terraform -chdir=infra apply -auto-approve -var reservation_id=$$RES -var name=$(LEASE_NAME) \
+	  -var image=$(IMAGE) -var volume_gb=$(VOLUME_GB) && \
 	IP=$$(terraform -chdir=infra output -raw ip) && \
 	until $(SSH) cc@$$IP true 2>/dev/null; do \
 	  echo "waiting for ssh on $$IP"; sleep 10; \
@@ -68,6 +81,12 @@ deploy:
 	  command -v git > /dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq git; }; \
 	  if [ -d $(REPO) ]; then git -C $(REPO) fetch -q ../$(REPO).bundle && git -C $(REPO) reset -q --hard FETCH_HEAD; \
 	  else git clone -q $(REPO).bundle $(REPO); fi && \
+	  if [ -b /dev/vdb ]; then \
+	    { sudo blkid /dev/vdb > /dev/null || sudo mkfs.ext4 -q /dev/vdb; } && sudo mkdir -p /mnt/vol && \
+	    { mountpoint -q /mnt/vol || sudo mount /dev/vdb /mnt/vol; } && sudo chown cc: /mnt/vol && \
+	    mkdir -p /mnt/vol/samples /mnt/vol/results-$(CONFIG) && \
+	    ln -sfn /mnt/vol/samples $(REPO)/samples && ln -sfn /mnt/vol/results-$(CONFIG) $(REPO)/results/$(CONFIG); \
+	  fi && \
 	  mkdir -p $(REPO)/$(SAMPLE_DIR)' && \
 	$(SSH) $(REMOTE) 'tar -xzf - -C $(REPO)/$(SAMPLE_DIR)' < $(SAMPLE) && \
 	$(SSH) $(REMOTE) 'bash $(REPO)/chameleon/bootstrap.sh && \
@@ -85,6 +104,22 @@ fetch:
 	rsync -a -e "$(SSH)" --exclude='data/' $(REMOTE):$(REPO)/results/$(CONFIG)/ results/$(CONFIG)/ && \
 	rsync -a -e "$(SSH)" --include='*/' --include='data/pdf' --include='data/farmaci.sqlite' --exclude='data/**' \
 	  $(REMOTE):$(REPO)/results/$(CONFIG)/ results/$(CONFIG)/ && \
+	$(LOG_TIME)
+
+# Split configuration, CPU VM: also the Markdown and the database that s4 needs (~1.2 GB)
+fetch-md:
+	@t0=$$(date +%s) && \
+	rsync -a -e "$(SSH)" --include='*/' --include='data/md/**' --include='data/farmaci.sqlite' --exclude='*' \
+	  $(REMOTE):$(REPO)/results/$(CONFIG)/ results/$(CONFIG)/ && \
+	$(LOG_TIME)
+
+# Split configuration, GPU VM: Markdown and database of the latest $(SPLIT_FROM) run -> samples/split
+push-md:
+	@t0=$$(date +%s) && \
+	SRC=$$(ls -d results/$(SPLIT_FROM)/*/data/md | tail -1 | xargs dirname) && \
+	echo "push $$SRC" && \
+	$(SSH) $(REMOTE) 'mkdir -p $(REPO)/samples/split' && \
+	rsync -a -e "$(SSH)" $$SRC/farmaci.sqlite $$SRC/md $(REMOTE):$(REPO)/samples/split/ && \
 	$(LOG_TIME)
 
 # Destroy the VM (destroy needs the variables declared; reservation_id is not used), then the lease.
