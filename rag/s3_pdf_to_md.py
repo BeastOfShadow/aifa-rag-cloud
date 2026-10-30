@@ -12,8 +12,22 @@ import os
 import sqlite3
 from multiprocessing import Pool
 from pathlib import Path
-import pymupdf
-import pymupdf4llm
+import onnxruntime as ort
+
+
+# PyMuPDF Layout (ONNX) crea sessioni onnxruntime senza limite di thread: sul Mac ogni worker
+# occupava ~3 core, in gran parte in attesa attiva, e oltre 2 worker la conversione rallentava.
+# Un thread per sessione, il parallelismo lo danno i worker. Va fatto prima di importare pymupdf4llm.
+class _OneThreadSession(ort.InferenceSession):
+    def __init__(self, path, sess_options=None, *args, **kwargs):
+        so = sess_options or ort.SessionOptions()
+        so.intra_op_num_threads = so.inter_op_num_threads = 1
+        super().__init__(path, sess_options=so, *args, **kwargs)
+
+
+ort.InferenceSession = _OneThreadSession
+import pymupdf        # noqa: E402
+import pymupdf4llm    # noqa: E402
 from tqdm import tqdm
 from config import DB_PATH, PDF_DIR, MD_DIR, KEEP_PDF, OCR_MIN_CHARS_PER_PAGE
 
