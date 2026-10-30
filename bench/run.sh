@@ -24,8 +24,10 @@ export TQDM_MININTERVAL=30   # barra di avanzamento ogni 30 s invece di 10 al se
 mkdir -p "$DATA_DIR"
 cp "$SAMPLE/farmaci.sqlite" "$DATA_DIR/"
 ln -s "$SAMPLE/pdf" "$DATA_DIR/pdf"
-# Markdown già convertiti da un'altra macchina (configurazione split): s4 senza s3
-if [ -d "$SAMPLE/md" ]; then ln -s "$SAMPLE/md" "$DATA_DIR/md"; fi
+# Markdown già convertiti da un'altra macchina (configurazione split): s4 senza s3.
+# Solo se la cartella contiene file: config.py crea md/ vuota anche nel campione, e collegarla
+# farebbe scrivere i Markdown di ogni run nel campione condiviso (i run successivi non convertono più).
+if [ -n "$(ls -A "$SAMPLE/md" 2>/dev/null)" ]; then ln -s "$SAMPLE/md" "$DATA_DIR/md"; fi
 
 # monitor risorse in background, chiusi all'uscita
 if command -v nvidia-smi >/dev/null; then

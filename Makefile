@@ -115,7 +115,7 @@ fetch:
 # Split configuration, CPU VM: also the Markdown and the database that s4 needs (~1.2 GB)
 fetch-md:
 	@t0=$$(date +%s) && \
-	rsync -a -e "$(SSH)" --include='*/' --include='data/md/**' --include='data/farmaci.sqlite' --exclude='*' \
+	rsync -aL -e "$(SSH)" --include='*/' --include='data/md/**' --include='data/farmaci.sqlite' --exclude='*' \
 	  $(REMOTE):$(REPO)/results/$(CONFIG)/ results/$(CONFIG)/ && \
 	$(LOG_TIME)
 
