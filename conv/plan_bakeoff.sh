@@ -15,10 +15,16 @@ TIMES=$OUT/times.csv
 [ -f "$TIMES" ] || echo "converter,version,seconds,status" > "$TIMES"
 nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv
 
-# Il driver della H100 è CUDA 12.6, vLLM è compilato per CUDA >= 12.8: sulle GPU da datacenter
-# il pacchetto di compatibilità in avanti di NVIDIA fa girare il runtime più nuovo sul driver vecchio
-sudo apt-get install -y -qq poppler-utils cuda-compat-12-9 > /dev/null 2>&1 || echo "cuda-compat non installato"
-COMPAT=/usr/local/cuda-12.9/compat
+# vLLM è compilato per CUDA >= 12.8. Se il driver è più vecchio (H100 intera con l'immagine CUDA: 12.6), sulle GPU
+# da datacenter il pacchetto di compatibilità in avanti di NVIDIA fa girare il runtime nuovo sul driver vecchio.
+# Con un driver più nuovo il pacchetto non serve, anzi romperebbe CUDA (libreria più vecchia del modulo del kernel)
+sudo apt-get install -y -qq poppler-utils > /dev/null
+CUDA_DRIVER=$(nvidia-smi | sed -n 's/.*CUDA Version: *\([0-9.]*\).*/\1/p')
+COMPAT=
+if [ "$(printf '%s\n' "$CUDA_DRIVER" 12.8 | sort -V | head -1)" != 12.8 ]; then
+  sudo apt-get install -y -qq cuda-compat-12-9 > /dev/null && COMPAT=/usr/local/cuda-12.9/compat
+fi
+echo "driver CUDA $CUDA_DRIVER, compat: ${COMPAT:-no}"
 
 venv() {   # venv <nome> <pacchetti...>: Python 3.12 per tutti (vLLM non ha ancora le wheel per 3.13+)
   local v=$W/venv/$1; shift
