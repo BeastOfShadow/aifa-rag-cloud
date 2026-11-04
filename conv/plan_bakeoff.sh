@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Confronto dei converter sul campione di prova (conv/gold.csv, 40 PDF, 980 pagine), sulla VM con la H100.
+# Confronto dei converter sul campione di prova (conv/gold.csv, 40 PDF, 980 pagine), sulla VM con la H100,
+# sui PDF senza il timbro AIFA.
 # Avviato da `make bench PLAN=conv/plan_bakeoff.sh` dopo `make conv-push`; risultati con `make conv-fetch`.
 # Ogni converter ha il suo ambiente (dipendenze incompatibili tra loro) e la sua cartella conv/out/<converter>/.
 # Se uno fallisce si passa al successivo: l'esito è in conv/out/times.csv e il log in conv/out/<converter>.log.
@@ -9,7 +10,8 @@ W=/mnt/vol/conv                      # volume: ambienti e modelli non stanno nei
 export HF_HOME=$W/hf UV_CACHE_DIR=$W/uv-cache
 mkdir -p "$W/out" "$W/venv"
 ln -sfn "$W/out" conv/out
-IN=$PWD/conv/data/pdf_gold
+RAW=$PWD/conv/data/pdf_gold
+IN=$PWD/conv/data/pdf_gold_clean      # senza il timbro AIFA (conv/clean.py): lo leggono tutti i converter tranne s3
 OUT=$PWD/conv/out
 TIMES=$OUT/times.csv
 [ -f "$TIMES" ] || echo "converter,version,seconds,status" > "$TIMES"
@@ -47,11 +49,13 @@ run() {    # run <converter> <versione> <comando...>: tempo totale sul campione,
   echo "== $name: $s in $(($(date +%s) - t0)) s"
 }
 
-# 0. riferimento: la conversione attuale di s3 (pymupdf4llm), nell'ambiente del RAG installato da make deploy
+.venv/bin/python conv/clean.py "$RAW" "$IN"
+
+# 0. riferimento: la conversione attuale di s3 (pymupdf4llm) sui PDF scaricati, nell'ambiente del RAG di make deploy
 run s3 "pymupdf4llm $(.venv/bin/python -c 'import pymupdf4llm; print(pymupdf4llm.__version__)')" \
   .venv/bin/python -c "
 import pathlib, sys, pymupdf4llm
-for p in sorted(pathlib.Path('$IN').glob('*.pdf')):
+for p in sorted(pathlib.Path('$RAW').glob('*.pdf')):
     (pathlib.Path('$OUT/s3') / (p.stem + '.md')).write_text(pymupdf4llm.to_markdown(str(p), show_progress=False))"
 
 # 1. Docling, pipeline standard: testo del PDF + modello di layout + TableFormer accurato, senza OCR

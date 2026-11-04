@@ -1,5 +1,6 @@
 """Punteggi del confronto tra converter sul campione di prova (conv/gold.csv), senza un riferimento scritto a mano:
-ogni Markdown è confrontato con il testo nativo del suo PDF.
+ogni Markdown è confrontato con il testo nativo del suo PDF, pulito dal timbro AIFA con conv/clean.py (il testo
+originale del produttore; se manca la versione pulita, il PDF scaricato).
 
 - fedeltà del testo: parole del PDF ritrovate nel Markdown (recall: se è bassa il converter perde testo) e parole del
   Markdown che nel PDF ci sono (precision: se è bassa il converter inventa o storpia). Filigrana e testo legale AIFA
@@ -87,7 +88,9 @@ def tables(md):
 gold = list(csv.DictReader(open(CONV / "gold.csv")))
 pdf = {}
 for g in gold:
-    d = pymupdf.open(CONV / "data" / "pdf" / f"{g['cod']}_{g['tipo']}.pdf")
+    name = f"{g['cod']}_{g['tipo']}.pdf"
+    clean = CONV / "data" / "pdf_gold_clean" / name
+    d = pymupdf.open(clean if clean.exists() else CONV / "data" / "pdf" / name)
     text = "\n".join(p.get_text() for p in d)
     text = re.sub(r"(\w)-\n(\w)", r"\1\2", text)                 # a capo con trattino
     pdf[g["cod"], g["tipo"]] = (len(d), text, words(strip_boilerplate(text)))
