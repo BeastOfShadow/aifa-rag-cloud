@@ -13,6 +13,7 @@ originale del produttore; se manca la versione pulita, il PDF scaricato).
 Uso: .venv/bin/python conv/score.py   legge conv/out/<converter>/ e conv/out/times.csv, scrive conv/results/bakeoff_*.csv
 """
 import csv
+import html
 import re
 from collections import Counter
 from pathlib import Path
@@ -47,8 +48,13 @@ def words(text):
 def md_plain(md):
     md = re.sub(r"!\[[^\]]*\]\([^)]*\)", " ", md)              # immagini
     md = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", md)            # link: tengo il testo
-    md = re.sub(r"<[^>]+>", " ", md)                            # tag html (tabelle, <br>, <mark>, <sup>)
+    # commenti e tag html (tabelle, <br>, <sup>), non i < del testo: "< 200 cellule" fino al > dopo sono pagine intere
+    md = html.unescape(re.sub(r"<!--.*?-->|</?[a-zA-Z][^<>]*>", " ", md, flags=re.S))
     return re.sub(r"[|*#_`>~]+|-{3,}", " ", md)
+
+
+assert md_plain("<td>CD4 < 200 cellule</td><!-- image -->| &lt;1/10 | > 3").split() == ["CD4", "<", "200", "cellule",
+                                                                                        "<1/10", "3"]
 
 
 def section_patterns(tipo):

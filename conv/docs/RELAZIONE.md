@@ -65,15 +65,15 @@ Ho misurato la conversione attuale sul campione di prova (§6) con le metriche d
 
 | Misura | s3 attuale |
 |---|---|
-| parole del PDF ritrovate nel Markdown (recall) | 0,97 |
-| parole del Markdown presenti nel PDF (precision) | 0,79 |
-| titoli standard riconosciuti come titoli | 7,6% |
+| parole del PDF ritrovate nel Markdown (recall) | 0,99 |
+| parole del Markdown presenti nel PDF (precision) | 0,77 |
+| titoli standard riconosciuti come titoli | 21% |
 | tabelle con dentro la filigrana | 174 su 226 |
 | righe di tabella con un numero di celle diverso dall'intestazione | 16% |
 
-Il testo quindi c'è quasi tutto, ma solo un titolo su tredici è riconoscibile come titolo. La precision sotto 1 viene in parte dal contenuto delle tabelle che in alcuni RCP compare due volte.
+Il testo quindi c'è quasi tutto, ma solo un titolo su cinque è riconoscibile come titolo. La precision sotto 1 viene in parte dal contenuto delle tabelle che in alcuni RCP compare due volte.
 
-Guardando i PDF ho trovato anche la causa di buona parte di questi errori. Oltre al piè di pagina legale, AIFA stampa su ogni pagina una filigrana diagonale "Agenzia Italiana del Farmaco", grigia e semitrasparente, che attraversa tutto il testo. La filigrana è nello strato di testo del PDF, quindi i converter la leggono insieme al resto e i modelli di layout la scambiano per una parte della pagina. In un RCP di prova era il 13% del testo estratto. Docling sui PDF scaricati, per esempio, in alcuni documenti unisce tutto il testo in un solo paragrafo e perde quasi metà delle parole.
+Guardando i PDF ho trovato anche la causa di buona parte di questi errori. Oltre al piè di pagina legale, AIFA stampa su ogni pagina una filigrana diagonale "Agenzia Italiana del Farmaco", grigia e semitrasparente, che attraversa tutto il testo. La filigrana è nello strato di testo del PDF, quindi i converter la leggono insieme al resto e i modelli di layout la scambiano per una parte della pagina. In un RCP di prova era il 13% del testo estratto. Docling sui PDF scaricati, per esempio, in alcuni documenti unisce tutto il testo in un solo paragrafo e riconosce come titoli solo il 7% dei titoli standard.
 
 AIFA aggiunge il timbro dopo, in due flussi di contenuto separati da quello del produttore, il primo con il piè di pagina e il secondo con la filigrana. Lo schema è lo stesso in 269.402 pagine su 269.450 e in 18.009 PDF su 18.016. Per questo lo posso togliere in modo esatto senza cercare il testo: `conv/clean.py` svuota quei due flussi e lascia identica la pagina originale. La data "Documento reso disponibile da AIFA il …" la salvo a parte, perché dice quando AIFA ha pubblicato il documento. Tutti i converter leggono i PDF puliti, tranne s3 che resta sui PDF scaricati come nella pipeline del progetto.
 
