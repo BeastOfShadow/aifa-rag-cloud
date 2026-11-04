@@ -16,7 +16,8 @@ DATA_DIR=conv/data PILOT_N=0 .venv/bin/python rag/s2_download.py
 #    its PDFs downloaded right away
 .venv/bin/python conv/gold.py                 # -> conv/gold.csv
 
-# 3. converter bake-off on an H100 VM (each converter in its own venv on a volume)
+# 3. converter bake-off on an H100 VM (each converter in its own venv on a volume); the plan first removes the
+#    AIFA stamp (footer and diagonal watermark) from the PDFs with conv/clean.py
 make lease up FLAVOR_ID=<g1.h100.pci.1 id> LEASE_NAME=aifa-conv IMAGE=CC-Ubuntu24.04-CUDA VOLUME_GB=150
 make deploy conv-push bench PLAN=conv/plan_bakeoff.sh LEASE_NAME=aifa-conv
 make conv-fetch down LEASE_NAME=aifa-conv

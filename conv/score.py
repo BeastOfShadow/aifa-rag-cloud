@@ -62,9 +62,10 @@ def sections(pdf_text, md, tipo):
     for pat in section_patterns(tipo).values():
         if re.search(r"^\s*" + pat, pdf_text, re.M | (re.I if tipo == "FI" else 0)):
             expected += 1
-            # titolo nel Markdown: a inizio riga, come intestazione (#) o in grassetto
-            found += bool(re.search(r"^\s*(#{1,6}\s*|\*\*\s*)(\d+\.?\s*)?\**\s*" + pat.split(r"\.?", 1)[-1]
-                                    if tipo == "FI" else r"^\s*(#{1,6}\s*|\*\*\s*)" + pat, md, re.M | re.I))
+            # titolo nel Markdown: a inizio riga, come intestazione (#), in grassetto o entrambi (## **4.1 …)
+            head = r"^\s*(#{1,6}\s*(\*\*\s*)?|\*\*\s*)"
+            found += bool(re.search(head + r"(\d+\.?\s*)?\**\s*" + pat.split(r"\.?", 1)[-1]
+                                    if tipo == "FI" else head + pat, md, re.M | re.I))
     return expected, found
 
 

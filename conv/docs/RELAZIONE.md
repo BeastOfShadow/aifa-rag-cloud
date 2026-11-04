@@ -73,14 +73,18 @@ Ho misurato la conversione attuale sul campione di prova (§6) con le metriche d
 
 Il testo quindi c'è quasi tutto, ma solo un titolo su tredici è riconoscibile come titolo. La precision sotto 1 viene in parte dal contenuto delle tabelle che in alcuni RCP compare due volte.
 
+Guardando i PDF ho trovato anche la causa di buona parte di questi errori. Oltre al piè di pagina legale, AIFA stampa su ogni pagina una filigrana diagonale "Agenzia Italiana del Farmaco", grigia e semitrasparente, che attraversa tutto il testo. La filigrana è nello strato di testo del PDF, quindi i converter la leggono insieme al resto e i modelli di layout la scambiano per una parte della pagina. In un RCP di prova era il 13% del testo estratto. Docling sui PDF scaricati, per esempio, in alcuni documenti unisce tutto il testo in un solo paragrafo e perde quasi metà delle parole.
+
+AIFA aggiunge il timbro dopo, in due flussi di contenuto separati da quello del produttore, il primo con il piè di pagina e il secondo con la filigrana. Lo schema è lo stesso in 269.402 pagine su 269.450 e in 18.009 PDF su 18.016. Per questo lo posso togliere in modo esatto senza cercare il testo: `conv/clean.py` svuota quei due flussi e lascia identica la pagina originale. La data "Documento reso disponibile da AIFA il …" la salvo a parte, perché dice quando AIFA ha pubblicato il documento. Tutti i converter leggono i PDF puliti, tranne s3 che resta sui PDF scaricati come nella pipeline del progetto.
+
 ## 5. Piano
 
 | Fase | Cosa | Risultato |
 |---|---|---|
-| 1 | riscaricare tutti i PDF disponibili su AIFA e questa volta tenerli | `conv/data/pdf`, circa 6,6 GB |
+| 1 | riscaricare tutti i PDF disponibili su AIFA e questa volta tenerli | `conv/data/pdf`, 18.016 PDF, 6 GB |
 | 2 | scegliere un campione di prova di 40 documenti | `conv/gold.csv` |
 | 3 | confrontare i converter sul campione con la H100 | scelta del converter, con i numeri |
-| 4 | convertire tutto con il converter scelto, sulle 4 H100 se disponibili | Markdown e struttura JSON di ogni documento, con un controllo di qualità per documento |
+| 4 | togliere il timbro AIFA da tutti i PDF e convertirli con il converter scelto, sulle 4 H100 se disponibili | Markdown e struttura JSON di ogni documento, con un controllo di qualità per documento |
 | 5 | dividere in sezioni standard | una riga per sezione, con il suo identificativo (RCP 4.8, FI 2…) |
 | 6 | dizionario di parole, coppie e terne di parole e frasi ricorrenti, per sezione | elenco delle frasi da togliere e dei termini da proteggere |
 | 7 | mappa generale di documenti, sezioni, principi attivi, ATC ed effetti indesiderati | grafo navigabile |
