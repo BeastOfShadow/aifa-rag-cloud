@@ -14,3 +14,7 @@ results/*/*/data/
 # file personali/temporanei nella root
 /*.pdf
 /*.log
+
+# pipeline di conversione nuova (conv/): PDF, Markdown e JSON, troppo grandi per il repo
+conv/data/
+conv/out/

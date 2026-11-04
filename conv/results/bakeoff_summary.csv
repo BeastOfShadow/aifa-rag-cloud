@@ -1,0 +1,2 @@
+converter,docs,pages,recall,precision,recall_min,sections_found,sections_expected,tables,table_rows,ragged_rows,tables_with_watermark,watermark,sections,ragged
+s3,40,980,0.9682967098898214,0.7895361883511074,0.8445449406444319,53,697,226,2797,455,174,956,0.07604017216642754,0.16267429388630675
