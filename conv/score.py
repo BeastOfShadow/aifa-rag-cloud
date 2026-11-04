@@ -86,10 +86,19 @@ def tables(md):
             out.append(([len(r.strip().strip("|").split("|")) for r in rows], "\n".join(block)))
             block = []
     for t in re.findall(r"<table.*?</table>", md, re.S | re.I):
-        rows = re.findall(r"<tr.*?</tr>", t, re.S | re.I)
-        cells = [sum(int(m or 1) for m in re.findall(r"<t[dh][^>]*?(?:colspan=\"?(\d+))?[^>]*>", r, re.I)) for r in rows]
+        cells, carry = [], []   # carry: [righe ancora coperte, colonne] delle celle con rowspan delle righe sopra
+        for r in re.findall(r"<tr.*?</tr>", t, re.S | re.I):
+            tags = re.findall(r"<t[dh]\b[^>]*>", r, re.I)
+            span = [[int((re.search(rf"{a}=\"?(\d+)", c, re.I) or [0, 1])[1]) for a in ("rowspan", "colspan")]
+                    for c in tags]
+            cells.append(sum(c for _, c in carry) + sum(c for _, c in span))
+            carry = [[n - 1, c] for n, c in carry + span if n > 1]
         out.append((cells, t))
     return out
+
+
+assert tables("<table><tr><td rowspan=2>a</td><td colspan=\"2\">b</td></tr><tr><td>c</td><td>d</td></tr></table>")[0][0] \
+    == [3, 3]
 
 
 gold = list(csv.DictReader(open(CONV / "gold.csv")))
