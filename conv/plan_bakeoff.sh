@@ -14,6 +14,8 @@ OUT=$PWD/conv/out
 TIMES=$OUT/times.csv
 [ -f "$TIMES" ] || echo "converter,version,seconds,status" > "$TIMES"
 nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv
+# sulla vGPU (immagine CC-Ubuntu24.04-CUDA-VGPU) il modulo uvm non è caricato e CUDA non parte
+sudo modprobe nvidia-uvm
 
 # vLLM è compilato per CUDA >= 12.8. Se il driver è più vecchio (H100 intera con l'immagine CUDA: 12.6), sulle GPU
 # da datacenter il pacchetto di compatibilità in avanti di NVIDIA fa girare il runtime nuovo sul driver vecchio.
