@@ -14,8 +14,13 @@ OUT=$PWD/conv/out
 TIMES=$OUT/times.csv
 [ -f "$TIMES" ] || echo "converter,version,seconds,status" > "$TIMES"
 nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv
-# sulla vGPU (immagine CC-Ubuntu24.04-CUDA-VGPU) il modulo uvm non è caricato e CUDA non parte
-sudo modprobe nvidia-uvm
+# sulla vGPU (immagine CC-Ubuntu24.04-CUDA-VGPU) il modulo uvm in /lib/modules è della build "open" del driver,
+# mentre quello caricato è il proprietario: modprobe fallisce e CUDA non parte finché non carico l'uvm proprietario
+if [ ! -e /dev/nvidia-uvm ]; then
+  sudo modprobe nvidia-uvm 2>/dev/null || \
+    sudo insmod "$(ls /var/lib/dkms/nvidia/*/"$(uname -r)"/x86_64/module/nvidia-uvm.ko* | grep -v -- -open/ | head -1)"
+  sudo nvidia-modprobe -u -c=0
+fi
 
 # vLLM è compilato per CUDA >= 12.8. Se il driver è più vecchio (H100 intera con l'immagine CUDA: 12.6), sulle GPU
 # da datacenter il pacchetto di compatibilità in avanti di NVIDIA fa girare il runtime nuovo sul driver vecchio.
