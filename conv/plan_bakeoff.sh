@@ -97,15 +97,20 @@ TORCH=cu129 venv surya-vllm "vllm @ $VLLM/v0.20.1/vllm-0.20.1+cu129-cp38-abi3-ma
 # 4. MinerU, livello advanced (VLM servito da vLLM), server locale. Il server arriva al livello standard, che accetta
 #    anche le richieste advanced (stessi modelli, più sforzo). Ogni comando di mineru vuole il server acceso: lo avvio e
 #    spengo subito la telemetria, che invia solo dati raccolti durante il parsing, e punto l'URL del servizio remoto a
-#    una porta chiusa, così nessun PDF esce dalla VM. Il tempo misurato non comprende l'avvio del server (~2,5 min)
+#    una porta chiusa, così nessun PDF esce dalla VM. Il tempo misurato non comprende l'avvio del server (~2,5 min).
+#    Con la config di un'esecuzione precedente il server parte già al livello standard, e config set mentre carica
+#    vLLM va in timeout: prima aspetto che sia pronto (su una VM nuova il ciclo arriva in fondo e si prosegue)
 M=$W/venv/mineru/bin
-TORCH=cu129 venv mineru "mineru[full]==4.0.12" "vllm @ $VLLM/v0.28.0/vllm-0.28.0+cu129-cp38-abi3-manylinux_2_28_x86_64.whl" && (
+# docvortex (estrazione del testo nativo) è vincolato solo a <1: le 0.6 hanno cambiato l'interfaccia e il parse
+# fallisce, quindi fisso la versione uscita con MinerU 4.0.12
+TORCH=cu129 venv mineru "mineru[full]==4.0.12" docvortex==0.5.16 "vllm @ $VLLM/v0.28.0/vllm-0.28.0+cu129-cp38-abi3-manylinux_2_28_x86_64.whl" && (
   export LD_LIBRARY_PATH=$COMPAT PATH=$M:$PATH        # vLLM compila al volo con ninja, che sta nell'ambiente
   healthy() { "$M/mineru" server status --json | python3 -c \
     "import json, sys; sys.exit(not json.load(sys.stdin)['parse_server']['local']['healthy'])"; }
   "$M/mineru" server start && "$M/mineru" telemetry disable && \
   "$M/mineru" config set parse_server.remote.url http://127.0.0.1:9 && \
   "$M/mineru-kit" models download --tier standard && \
+  for _ in $(seq 30); do healthy && break; sleep 10; done && \
   "$M/mineru" config set parse_server.local.managed_tier standard && \
   "$M/mineru" config set parse_server.local.mode managed && "$M/mineru" server restart && \
   for _ in $(seq 90); do healthy && break; sleep 10; done && healthy
