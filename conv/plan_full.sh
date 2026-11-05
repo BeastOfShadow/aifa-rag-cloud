@@ -2,7 +2,8 @@
 # Conversione completa con Docling, sulla VM con la GPU: scarica tutti i PDF da AIFA (s2 del progetto, sul DB di s1
 # senza la tabella docs in /mnt/vol/conv/data/farmaci.sqlite), toglie il timbro AIFA (conv/clean.py) e converte con le
 # stesse opzioni del confronto (conv/plan_bakeoff.sh, che crea anche l'ambiente di Docling).
-# Si può rilanciare: s2 salta i PDF già scaricati e Docling i documenti già convertiti.
+# Si può rilanciare: salta i passi finiti e Docling i documenti già convertiti. Dopo un reboot della VM il volume va
+# rimontato a mano (sudo mount /dev/vdb /mnt/vol, non è nel fstab).
 # Uso sulla VM: bash conv/plan_full.sh > ~/full.log 2>&1   (in tmux); risultati in /mnt/vol/conv/full/
 cd "$(dirname "$0")/.."
 W=/mnt/vol/conv
@@ -11,9 +12,11 @@ OUT=$W/full
 export HF_HOME=$W/hf
 mkdir -p "$OUT/docling"
 t0=$(date +%s)
-DATA_DIR=$D PILOT_N=0 .venv/bin/python rag/s2_download.py
-t1=$(date +%s)
-.venv/bin/python conv/clean.py "$D/pdf" "$D/pdf_clean"
+# s2 e clean si saltano se hanno già finito (clean scrive stamp.csv alla fine): s2 ritenta per ore i 7.182 documenti
+# che AIFA non pubblica
+[ -f "$D/pdf_clean/stamp.csv" ] || { DATA_DIR=$D PILOT_N=0 .venv/bin/python rag/s2_download.py
+  t1=$(date +%s); .venv/bin/python conv/clean.py "$D/pdf" "$D/pdf_clean"; }
+t1=${t1:-$(date +%s)}
 t2=$(date +%s)
 # a blocchi di 500 documenti: ogni blocco ricarica i modelli (~20 s) ma un errore non fa ripartire da capo
 for f in "$D"/pdf_clean/*.pdf; do b=$(basename "$f" .pdf); [ -f "$OUT/docling/$b.md" ] || echo "$f"; done | \
