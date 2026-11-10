@@ -4,12 +4,14 @@
 # Avviato da `make bench PLAN=conv/plan_bakeoff.sh` dopo `make conv-push`; risultati con `make conv-fetch`.
 # Ogni converter ha il suo ambiente (dipendenze incompatibili tra loro) e la sua cartella conv/out/<converter>/.
 # Se uno fallisce si passa al successivo: l'esito è in conv/out/times.csv e il log in conv/out/<converter>.log.
+# RUN=<nome>: cartella dei risultati sul volume (default out), per non sovrascrivere un'esecuzione precedente;
+# SKIP_VLM=1: salta GraniteDocling (già escluso: butta tabelle e testo, e su GPU piccola è lentissimo).
 cd "$(dirname "$0")/.."
 export PATH="$HOME/.local/bin:$PATH"
 W=/mnt/vol/conv                      # volume: ambienti e modelli non stanno nei 40 GB del disco della VM
 export HF_HOME=$W/hf UV_CACHE_DIR=$W/uv-cache
-mkdir -p "$W/out" "$W/venv"
-ln -sfn "$W/out" conv/out
+mkdir -p "$W/${RUN:-out}" "$W/venv"
+ln -sfn "$W/${RUN:-out}" conv/out
 RAW=$PWD/conv/data/pdf_gold
 IN=$PWD/conv/data/pdf_gold_clean      # senza il timbro AIFA (conv/clean.py): lo leggono tutti i converter tranne s3
 OUT=$PWD/conv/out
@@ -66,7 +68,7 @@ run docling 2.141.0 "$W/venv/docling/bin/docling" --from pdf --to md --to json -
   --device cuda --image-export-mode placeholder --output "$OUT/docling" "$IN"
 
 # 2. Docling con il VLM GraniteDocling: legge le pagine come immagini
-run docling-vlm 2.141.0 "$W/venv/docling/bin/docling" --from pdf --to md --to json --pipeline vlm \
+[ -n "$SKIP_VLM" ] || run docling-vlm 2.141.0 "$W/venv/docling/bin/docling" --from pdf --to md --to json --pipeline vlm \
   --vlm-model granite_docling --device cuda --image-export-mode placeholder --output "$OUT/docling-vlm" "$IN"
 
 # 3. marker in modalità balanced: VLM surya per layout, OCR e tabelle. marker lo avvierebbe con l'immagine docker di

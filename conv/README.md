@@ -24,6 +24,16 @@ make conv-fetch down LEASE_NAME=aifa-conv
 .venv/bin/python conv/score.py                # -> conv/results/bakeoff_summary.csv, bakeoff_scores.csv
 ```
 
+```bash
+# 4. on the 4xH100 lease: reuse the data volume of the dev VM (models, venvs, cleaned PDFs, first Docling output),
+#    attached between `make up` and `make deploy` (deploy mounts /dev/vdb without formatting it)
+make lease up FLAVOR_ID=<g1.h100.pci.4 id> LEASE_NAME=aifa-conv-full IMAGE=CC-Ubuntu24.04-CUDA   # VOLUME_GB=0
+openstack server add volume <server> aifa-conv-dev-data
+make deploy conv-push bench PLAN=conv/plan_h100.sh LEASE_NAME=aifa-conv-full   # bake-off on the H100, no GraniteDocling
+make ssh LEASE_NAME=aifa-conv-full                                             # then, once the converter is chosen:
+bash aifa-rag-cloud/conv/plan_full.sh > ~/full.log 2>&1                        # all PDFs, one Docling shard per GPU
+```
+
 `make deploy` ships the committed `HEAD`, so `conv/plan_bakeoff.sh` must be committed first.
 The scores compare each Markdown with the native text of its PDF (no hand-written reference): word recall and
 precision, standard section titles found as titles, table consistency, watermark left; see the docstring of
