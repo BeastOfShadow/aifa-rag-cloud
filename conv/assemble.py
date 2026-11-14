@@ -3,7 +3,8 @@ poi tre passaggi per regola, senza modelli:
 1. unione delle tabelle spezzate tra due pagine: due tabelle consecutive con lo stesso numero di colonne e in mezzo solo
    righe vuote o commenti (marcatori di pagina, immagini); l'intestazione ripetuta della seconda si toglie, altrimenti
    la sua prima riga diventa una riga di dati;
-2. tolti i commenti HTML (marcatori di pagina, segnaposto di immagini);
+2. tolti i commenti HTML (marcatori di pagina, segnaposto di immagini), i riferimenti a immagini e i tag <u>, <details>,
+   <summary>, <sup>, <sub> (il testo resta);
 3. riparazione dei titoli QRD (righe che sono un titolo diventano "## titolo").
 Scrive <uscita>/<doc>.md e <uscita>/provenance.csv (sorgente, tabelle unite, titoli aggiunti).
 Uso: .venv/bin/python conv/assemble.py <docling> <mineru> <olmocr> <scelte.csv> <uscita>"""
@@ -76,6 +77,8 @@ def merge_html_tables(md):
 
 def clean(md):
     md = re.sub(r"<!--.*?-->", "", md, flags=re.S)
+    md = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", md)                       # riferimenti a immagini (MinerU): non esistono più
+    md = re.sub(r"</?(?:u|details|summary|sup|sub)>", "", md, flags=re.I)  # tag di MinerU: il testo resta
     return re.sub(r"\n{3,}", "\n\n", md).strip() + "\n"
 
 
