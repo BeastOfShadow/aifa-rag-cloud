@@ -1,7 +1,7 @@
 # Una conversione fedele dei documenti AIFA, da PDF a Markdown strutturato
 
 **Simone Negro** — matricola 20051767 — Università del Piemonte Orientale
-Lavoro successivo al progetto per il corso del prof. Massimo Canonico — in corso, 04/11/2026
+Lavoro successivo al progetto per il corso del prof. Massimo Canonico — in corso, 14/11/2026
 
 ---
 
@@ -126,12 +126,100 @@ La precision è importante soprattutto per i converter che leggono le pagine com
 | s3 attuale (pymupdf4llm) | quella del progetto | testo del PDF, tabelle ricostruite da MuPDF |
 | Docling | 2.141.0 | testo del PDF più un modello di layout e TableFormer per le tabelle |
 | Docling con GraniteDocling | 2.141.0 | un modello visivo (VLM) piccolo che legge le pagine come immagini |
-| marker | 2.0.0 | testo del PDF più il VLM surya per layout e tabelle |
+| marker | 2.0.0, modalità balanced | testo del PDF più il VLM surya per layout e tabelle |
 | MinerU | 4.0.12, livello advanced | VLM, con server locale e telemetria spenta |
 | olmOCR | 0.4.27 | VLM (Qwen2.5-VL addestrato per l'OCR) che riceve l'immagine della pagina e il testo del PDF |
 
 Ho fissato per ognuno l'ultima versione uscita da almeno due settimane. Ogni converter ha il suo ambiente Python, perché le dipendenze sono incompatibili tra loro (`conv/plan_bakeoff.sh`).
 
+Farli girare ha richiesto qualche aggiustamento, tutto nello script:
+- vLLM su PyPI è compilato per CUDA 13, mentre il driver della H100 arriva a CUDA 12.6. Uso le build per CUDA 12.9 delle release di vLLM con il pacchetto di compatibilità di NVIDIA;
+- marker avvia il suo modello con docker, che sulla VM non c'è. Avvio io lo stesso server vLLM con gli stessi parametri e marker lo usa da lì;
+- MinerU 4.0.12 chiede solo una libreria (docvortex) di versione inferiore alla 1, e il 04/11 è uscita la 0.6.13 che ne cambia l'interfaccia e fa fallire ogni conversione. Ho fissato la 0.5.16, uscita insieme a MinerU 4.0.12. Inoltre MinerU converte di default solo le prime 10 pagine e vuole il suo server acceso prima di ogni comando;
+- olmOCR vuole una GPU da almeno 15 GB, quindi sulla vGPU da 12 GB non parte.
+
 ## 9. Risultati
 
-Da completare dopo il confronto sulla H100.
+### 9.1 Confronto sul campione
+
+Tutti sui PDF puliti, tranne s3 che legge i PDF scaricati come nella pipeline del progetto. Tempi sulla H100 per i 40 documenti (980 pagine), modelli caricati compresi. GraniteDocling l'ho misurato solo sulla vGPU, perché è stato escluso subito.
+
+| Converter | Recall | Precision | Recall minima | Titoli (marcati / anche senza marcatura) | Tabelle | Righe sfasate | Secondi | Secondi per pagina |
+|---|---|---|---|---|---|---|---|---|
+| s3 attuale | 0,994 | 0,770 | 0,926 | 21% / 22% | 226 | 16% | 292 | 0,30 |
+| Docling | 0,994 | 0,990 | 0,928 | 92% / 94% | 292 | 0% | 125 | 0,13 |
+| MinerU | 0,992 | 0,988 | 0,899 | 96% / 96% | 299 | 0% | 631 | 0,64 |
+| olmOCR | 0,985 | 0,992 | 0,877 | 0% / 98% | 289 | 7,5% | 342 | 0,35 |
+| marker | 0,976 | 0,996 | 0,886 | 91% / 92% | 285 | 0% | 1.200 | 1,22 |
+| GraniteDocling (vGPU) | 0,924 | 0,983 | 0,725 | 97% / 97% | 27 | 0% | 6.499 | 6,63 |
+
+GraniteDocling e marker li ho esclusi perché perdono testo senza segnalarlo. GraniteDocling butta intere tabelle, per esempio quella delle dosi pediatriche di un radiofarmaco, e marker salta le righe corte e alcuni sottotitoli. marker impiega lo stesso tempo sulla vGPU e sulla H100, quindi il suo limite è la CPU e non la GPU.
+
+olmOCR scrive i titoli come righe semplici, senza segni di intestazione. Per questo ho aggiunto al punteggio una seconda misura, il titolo all'inizio di una riga con o senza marcatura. Le righe sfasate di MinerU risultavano al 42% finché il conteggio non teneva conto delle celle unite su più righe.
+
+Ho scelto Docling come base. Ha la recall più alta, anche nel documento peggiore, è il più veloce e produce anche un JSON con la struttura di ogni pagina. MinerU è quasi pari.
+
+### 9.2 Prove di ibrido sul campione
+
+Prima di convertire tutto ho provato a mescolare i converter (`conv/exp/hybrid_tests.py`):
+- scegliendo per ogni documento il converter con la recall più alta si passa da 0,9935 a 0,9963, e quasi tutto il guadagno viene da un solo documento;
+- scegliendo per ogni sezione il guadagno viene quasi solo da titoli che un converter riconosce e l'altro no, non da testo in più;
+- riconoscendo i titoli QRD nel testo e segnandoli come intestazione, i titoli trovati passano dal 92% al 94% con Docling e dallo 0% al 97% con olmOCR.
+
+Quindi ho tenuto un converter solo come base e ho riparato quello che manca, con un ripiego sugli altri dove Docling va male.
+
+### 9.3 Conversione completa
+
+Docling ha convertito i 18.016 PDF puliti. 17.196 sulla vGPU, che però si è bloccata due volte (il kernel della VM si fermava, a prescindere da cosa girava), e gli altri sulle 4 H100 in 788 secondi, un quarto dei documenti per GPU. Il controllo di qualità su tutti i documenti (`conv/qc.py`) ha trovato 139 file vuoti, scritti mentre la vGPU si bloccava. Ho riconvertito tutti i documenti di quella finestra in 456 secondi.
+
+Con il testo nativo di ogni PDF come riferimento, su tutto il corpus:
+
+| Misura | Docling |
+|---|---|
+| recall media e mediana | 0,9944 e 0,9968 |
+| documenti con recall sotto 0,95 | 188 (1,0%), di cui 21 sotto 0,90 |
+| precision media | 0,9937 |
+| titoli QRD riconosciuti | 92,9%, con la riparazione 96,9% |
+| tabelle | 59.898, di cui 18.500 coppie consecutive con le stesse colonne |
+
+I 188 documenti sotto 0,95 li ho riconvertiti con MinerU (1.928 secondi) e olmOCR (455 secondi) e per ognuno ho tenuto la versione con la recall più alta. La recall media di questi documenti passa da 0,915 a 0,983. Vince MinerU in 162 casi, olmOCR in 24 e Docling in 2.
+
+Solo 2 PDF su 18.016 hanno il testo nativo illeggibile, cioè un font senza la tabella dei caratteri (044480, FI e RCP). Per questi serve leggere l'immagine della pagina, e MinerU e olmOCR, che lo fanno in modo indipendente, concordano su 97–99% delle parole. Negli altri pochi documenti ancora sotto 0,95 è il testo nativo ad avere parole spezzate, come "bus tina", che il converter invece ricompone.
+
+### 9.4 Corpus finale
+
+`conv/assemble.py` mette insieme per ogni documento la versione scelta e poi, senza modelli:
+- unisce le tabelle spezzate tra due pagine, cioè due tabelle consecutive con le stesse colonne e niente testo in mezzo, togliendo l'intestazione ripetuta;
+- toglie i commenti HTML, i riferimenti alle immagini e i tag che aggiunge MinerU, tenendo il testo;
+- segna come intestazione le righe che sono un titolo QRD.
+
+| Misura | Corpus finale |
+|---|---|
+| documenti | 18.016 (Docling 17.829, MinerU 163, olmOCR 24) |
+| recall media | 0,9948 |
+| documenti con recall sotto 0,95 | 10, di cui 4 sotto 0,90 |
+| precision media | 0,9940 |
+| titoli QRD riconosciuti | 96,9% di 302.075 |
+| tabelle | 45.282, dopo averne unite 14.616 |
+
+In 326 documenti la recall scende un po' dopo l'unione, perché le intestazioni delle tabelle ripetute a ogni pagina ci sono più volte nel testo nativo e solo una volta nel Markdown. È voluto.
+
+### 9.5 Vocabolario e sezioni
+
+`conv/vocab.py` divide ogni documento nelle sue sezioni e conta parole, coppie e terne per sezione. Per la sezione 1 dei FI all'inizio riconoscevo solo "Cos'è" e non "Che cos'è", e cercavo la sezione dopo l'indice iniziale nel modo sbagliato. Corretto questo, la sezione 1 c'è in 8.611 FI su 9.008 invece di 5.027.
+
+| Misura | Valore |
+|---|---|
+| parole in tutto il corpus | 97 milioni |
+| sezioni | 309.517 |
+| sezioni QRD per documento | 26,7 negli RCP (su 28), 5,7 nei FI (su 6) |
+| documenti senza modello QRD (formato vecchio) | 42 RCP e 298 FI |
+| parole distinte presenti in almeno 2 documenti | 89.606 |
+| parole, coppie e terne per sezione | 283.588, 449.546 e 516.355 |
+| frasi identiche in almeno 20 documenti della stessa sezione | 10.330, di cui 30 in almeno metà e 6 in almeno il 90% |
+
+Le frasi più ripetute sono formule di rito, per esempio "Potrebbe aver bisogno di leggerlo di nuovo" nel 97% dei FI. Sono poche, quindi il testo da togliere come ripetuto è poco. Le parole presenti in 2 soli documenti sono in buona parte rumore, ma ci sono anche i nomi commerciali rari, quindi non si può pulire per frequenza. La pulizia la decido più avanti, misurando l'effetto sulla ricerca.
+
+Il vocabolario si guarda con `conv/docs/vocabulary.html`, generata da `conv/vocab_viz.py`.
+
+`conv/split_sections.py` salva ogni sezione in un file a parte, come pezzo esatto del documento. Rimettendo insieme le sezioni in ordine si riottiene il documento identico, e lo verifico su tutti. Documenti e sezioni, con l'inizio e la fine di ogni sezione nel documento e un'impronta sha256, sono in `corpus.sqlite`.
