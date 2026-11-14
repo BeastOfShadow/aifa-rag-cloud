@@ -8,6 +8,7 @@
 - <uscita>/removed.csv: ogni frase tolta, con quante volte e in quale sezione.
 Uso: .venv/bin/python conv/split_sections.py <md finali> <phrases.csv> <uscita> [PCT=0.5] [limite documenti]"""
 import csv
+import os
 import re
 import sqlite3
 import sys
@@ -68,7 +69,7 @@ if __name__ == "__main__":
     for r in csv.DictReader(open(PHR)):
         if float(r["pct"]) >= PCT:
             boiler[r["tipo"], r["section"]].add(r["phrase"])
-    con = sqlite3.connect(CONV.parent / "data" / "farmaci.sqlite")
+    con = sqlite3.connect(os.environ.get("FARMACI_DB", CONV.parent / "data" / "farmaci.sqlite"))   # sulla VM: s4data/farmaci.sqlite
     meta = {}
     for farm, den, atc, rag, forma in con.execute("SELECT COD_FARMACO, DENOMINAZIONE, CODICE_ATC, RAGIONE_SOCIALE, FORMA FROM conf"):
         meta.setdefault(farm, (den or "", atc or "", rag or "", forma or ""))
