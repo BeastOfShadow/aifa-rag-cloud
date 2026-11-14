@@ -26,7 +26,7 @@ CONV = Path(__file__).resolve().parent
 OUT, RES = CONV / "out", CONV / "results"
 
 RCP_IDS = [str(i) for i in range(1, 11)] + [f"{a}.{b}" for a, n in ((4, 9), (5, 3), (6, 6)) for b in range(1, n + 1)]
-FI_HEADS = [r"1\.?\s*Cos['’]\s*[eè]", r"2\.?\s*Cosa deve sapere",
+FI_HEADS = [r"1\.?\s*(?:Che\s+)?cos['’]\s*[eè]", r"2\.?\s*Cosa deve sapere",
             r"3\.?\s*Come (prendere|usare|assumere|utilizzare|somministrare|viene)",
             r"4\.?\s*Possibili effetti indesiderati", r"5\.?\s*Come conservare", r"6\.?\s*Contenuto della confezione"]
 WM = "documento reso disponibile"

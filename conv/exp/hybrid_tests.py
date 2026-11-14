@@ -23,16 +23,32 @@ MARK = r"(#{1,6}\s*(\*\*\s*)?|\*\*\s*)"
 
 
 def heading_positions(md, tipo):
-    """{id sezione: offset della riga del titolo} per i titoli QRD: RCP prima occorrenza dopo la sezione precedente, FI
-    l'ultima (l'indice iniziale ripete i titoli); solo righe corte"""
+    """{id sezione: offset della riga del titolo} per i titoli QRD, solo righe corte. RCP: prima occorrenza dopo la
+    sezione precedente. FI: l'indice iniziale ripete i titoli, uno dopo l'altro: una voce con il titolo della sezione
+    successiva a meno di 600 caratteri è dell'indice e si scarta (con l'ultima occorrenza si cadeva in frasi più avanti)"""
     pats = section_patterns(tipo)
-    last, found = -1, {}
-    for k in sorted(pats, key=lambda k: [int(x) for x in k.split(".")] if tipo == "RCP" else [int(k[0])]):
+    ks = sorted(pats, key=lambda k: [int(x) for x in k.split(".")] if tipo == "RCP" else [int(k[0])])
+    cand = {}
+    for k in ks:
         body = (r"(\d+\.?\s*)?\**\s*" + pat_tail(pats[k])) if tipo == "FI" else pats[k]
-        c = [m.start() for m in re.finditer(r"^[ \t]*" + MARK + "?" + body + r"[^\n]{0,110}$", md, re.M | re.I) if m.start() > last]
-        if c:
-            last = c[-1] if tipo == "FI" else c[0]
-            found[k] = last
+        cand[k] = [m.start() for m in re.finditer(r"^[ \t]*" + MARK + "?" + body + r"[^\n]{0,110}$", md, re.M | re.I)]
+    last, found = -1, {}
+    for i, k in enumerate(ks):
+        c = [p for p in cand[k] if p > last]
+        if not c:
+            continue
+        pick = c[0]
+        if tipo == "FI":
+            nxt = cand[ks[i + 1]] if i + 1 < len(ks) else []
+            pick = c[-1]
+            for p in c:
+                after = [q for q in nxt if q > p]
+                if i + 1 == len(ks) or not after or after[0] - p > 600:
+                    pick = p
+                    break
+            if i + 1 == len(ks):
+                pick = c[-1]                                   # ultima sezione: la voce dell'indice viene prima
+        found[k] = last = pick
     return found
 
 

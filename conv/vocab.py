@@ -16,6 +16,8 @@ from pathlib import Path
 CONV = Path(__file__).resolve().parent
 __file__ = str(CONV / "exp" / "hybrid_tests.py")
 exec(open(__file__).read().split("rows = []")[0])      # heading_positions, md_plain, section_patterns, words
+sys.path.insert(0, str(CONV))
+from split_sections import norm, sections_of     # la stessa suddivisione e la stessa normalizzazione delle frasi
 MD, OUT = Path(sys.argv[1]), Path(sys.argv[2])
 LIMIT = int(sys.argv[3]) if len(sys.argv) > 3 else 0
 MIN_DF = {1: 5, 2: 20, 3: 20}                          # soglie di scrittura di parole, coppie, terne
@@ -24,23 +26,10 @@ MIN_GLOBAL_DF = 2
 TOKEN = re.compile(r"[^\W\d_]{2,}|\d+(?:[.,]\d+)?")
 
 
-def sections_of(md, tipo):
-    pos = sorted((p, k) for k, p in heading_positions(md, tipo).items())
-    if not pos:
-        return [("", "", md)]
-    out = [("pre", "", md[:pos[0][0]])] if md[:pos[0][0]].strip() else []
-    for i, (p, k) in enumerate(pos):
-        body = md[p:pos[i + 1][0] if i + 1 < len(pos) else len(md)]
-        title = body.split("\n", 1)[0].strip("# *\t")[:100]
-        out.append((k, title, body))
-    return out
-
-
 def sentences(text):
     for s in re.split(r"(?<=[.;:!?])\s+|\n+", text):
-        s = re.sub(r"\s+", " ", s.lower()).strip(" -*|#")
-        s = re.sub(r"\d+(?:[.,]\d+)*", "#", s)
-        if len(s) >= 40 and not s.startswith(("<", "|")):
+        s = norm(s)
+        if s:
             yield s
 
 
