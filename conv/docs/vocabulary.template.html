@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Vocabolario AIFA</title>
 <style>
-:root{--bg:#fbfaf8;--panel:#fff;--ink:#1c1b1a;--ink2:#5d5a55;--line:#e6e2db;--bar:#2a6f97;--bar2:#a3b8c8;--acc:#b5532a}
-@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#171615;--panel:#201f1d;--ink:#eeebe6;--ink2:#a9a49b;--line:#34312d;--bar:#6aa6cc;--bar2:#3d5566;--acc:#e08a5e}}
-:root[data-theme=dark]{--bg:#171615;--panel:#201f1d;--ink:#eeebe6;--ink2:#a9a49b;--line:#34312d;--bar:#6aa6cc;--bar2:#3d5566;--acc:#e08a5e}
+:root{--bg:#fbfaf8;--panel:#fff;--ink:#1c1b1a;--ink2:#5d5a55;--line:#e6e2db;--bar:#2a6f97;--bar2:#dfe7ee;--acc:#b5532a}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#171615;--panel:#201f1d;--ink:#eeebe6;--ink2:#a9a49b;--line:#34312d;--bar:#6aa6cc;--bar2:#2c3944;--acc:#e08a5e}}
+:root[data-theme=dark]{--bg:#171615;--panel:#201f1d;--ink:#eeebe6;--ink2:#a9a49b;--line:#34312d;--bar:#6aa6cc;--bar2:#2c3944;--acc:#e08a5e}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
 main{max-width:1100px;margin:0 auto;padding:28px 16px 60px}
@@ -21,7 +21,7 @@ label.chk{flex-direction:row;align-items:center;gap:8px;font-size:14px;color:var
 .stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
 .stat b{display:block;font-size:22px;font-variant-numeric:tabular-nums}
 .stat span{color:var(--ink2);font-size:13px}
-.grid{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:18px}
+.grid{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:18px;align-items:start}
 @media(max-width:860px){.grid{grid-template-columns:1fr}}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
 .card h2{font-size:15px;margin:0 0 2px}
@@ -29,13 +29,15 @@ label.chk{flex-direction:row;align-items:center;gap:8px;font-size:14px;color:var
 .row{display:grid;grid-template-columns:minmax(90px,200px) 1fr 74px;gap:8px;align-items:center;padding:2px 0;font-size:14px}
 .row .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .row .b{height:14px;background:var(--bar2);border-radius:0 4px 4px 0;position:relative}
-.row .b i{position:absolute;inset:0 auto 0 0;background:var(--bar);border-radius:0 4px 4px 0}
+.row .b i{position:absolute;inset:0 auto 0 0;min-width:2px;background:var(--bar);border-radius:0 4px 4px 0}
 .row .v{text-align:right;font-variant-numeric:tabular-nums;color:var(--ink2)}
 .row:hover{background:color-mix(in srgb,var(--bar) 8%,transparent)}
-.hrow{display:grid;grid-template-columns:78px 1fr 70px;gap:8px;align-items:center;font-size:13px;padding:2px 0}
+.hrow{display:grid;grid-template-columns:90px 1fr 70px;gap:8px;align-items:center;font-size:13px;padding:2px 0}
 .hrow .b{height:16px;background:var(--bar2);border-radius:0 4px 4px 0}
-.hrow .b i{display:block;height:100%;background:var(--acc);border-radius:0 4px 4px 0}
+.hrow .b i{display:block;height:100%;min-width:2px;background:var(--acc);border-radius:0 4px 4px 0}
 .hrow .v{text-align:right;font-variant-numeric:tabular-nums;color:var(--ink2)}
+button{font:inherit;font-size:14px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 14px;margin-top:10px;cursor:pointer}
+button:hover{border-color:var(--bar)}
 .note{color:var(--ink2);font-size:12.5px;margin-top:14px}
 .empty{color:var(--ink2);padding:18px 0}
 </style>
@@ -50,74 +52,98 @@ label.chk{flex-direction:row;align-items:center;gap:8px;font-size:14px;color:var
   <label>Sezione<select id="sec"></select></label>
   <label>Lunghezza<select id="n"><option value="1">Parole</option><option value="2">Coppie di parole</option><option value="3">Terne di parole</option></select></label>
   <label>Conta<select id="metric"><option value="df">Documenti in cui compare</option><option value="tf">Occorrenze totali</option></select></label>
-  <label>Quante<select id="top"><option>25</option><option selected>50</option><option>100</option><option>200</option><option>300</option></select></label>
-  <label>Ordine<select id="order"><option value="desc" selected>Decrescente</option><option value="asc">Crescente</option></select></label>
-  <label>Cerca<input id="q" type="search" placeholder="es. pazienti"></label>
+  <label>Ordine<select id="order"><option value="desc" selected>Decrescente: dalla più usata</option><option value="asc">Crescente: dalla meno usata</option></select></label>
+  <label>Scala<select id="scale"><option value="log" selected>Logaritmica</option><option value="lin">Lineare</option></select></label>
+  <label>Righe per volta<select id="top"><option>25</option><option selected>50</option><option>100</option><option>200</option></select></label>
+  <label>Cerca<input id="q" type="search" placeholder="es. ibuprofene"></label>
   <label class="chk"><input id="stop" type="checkbox" checked> Nascondi parole vuote (di, il, che…)</label>
 </div>
 
 <div class="stats" id="stats"></div>
 
 <div class="grid">
-  <div class="card"><h2 id="listTitle"></h2><p id="listSub"></p><div id="list"></div></div>
+  <div class="card"><h2 id="listTitle"></h2><p id="listSub"></p><div id="list"></div><button id="more" hidden></button></div>
   <div class="card"><h2>Quante parole hanno poche o tante presenze</h2><p id="histSub"></p><div id="hist"></div></div>
 </div>
 <p class="note" id="note"></p>
 </main>
 <script>
-const D = /*DATA*/null;
+const IDX = /*DATA*/null;
 const STOP = new Set("di a da in con su per tra fra il lo la i gli le un uno una e ed o ma se che chi cui non è sono può possono al allo alla ai agli alle dal dallo dalla dai dagli dalle del dello della dei degli delle nel nello nella nei negli nelle sul sullo sulla sui sugli sulle come più anche ha hanno essere stato stata stati state viene vengono deve devono questo questa questi queste quello quella sia dopo prima durante tutti tutte ogni altri altre altro altra loro suo sua suoi sue ad ne si lei lui li mg ml".split(" "));
 const $ = id => document.getElementById(id);
 const fmt = n => n.toLocaleString("it-IT");
 const tipoName = {ALL:"Tutti (FI + RCP insieme)", RCP:"RCP (per il medico)", FI:"FI (per il paziente)"};
-$("tipo").innerHTML = Object.keys(D.data).map(t => `<option value="${t}">${tipoName[t]||t}</option>`).join("");
+$("tipo").innerHTML = IDX.tipi.map(t => `<option value="${t}">${tipoName[t]||t}</option>`).join("");
+
+// I dati completi di ogni vista stanno in conv/out/vocab_web/, un file per tipo, sezione e lunghezza
+window.VD = window.VD || {};
+const load = key => VD[key] ? Promise.resolve(VD[key]) : new Promise((ok, err) => {
+  const s = document.createElement("script");
+  s.src = "../out/vocab_web/" + key.replace(/\|/g, "_") + ".js";
+  s.onload = () => ok(VD[key]); s.onerror = () => err(new Error("manca " + s.src));
+  document.head.appendChild(s);
+});
 
 function fillSections(){
-  const t = $("tipo").value, s = D.sections[t];
+  const s = IDX.sections[$("tipo").value];
   $("sec").innerHTML = '<option value="all">Tutte le sezioni</option>' + Object.keys(s).map(k =>
     `<option value="${k}">${k === "pre" ? "Intestazione (prima della sezione 1)" : "Sezione " + k}</option>`).join("");
 }
 const allStop = term => term.split(" ").every(w => STOP.has(w));
+let shown = 0, token = 0, cache = {key: "", rows: [], i: 1};
 
-function render(){
-  const t = $("tipo").value, s = $("sec").value, n = $("n").value, d = D.data[t][s][n];
-  const isAll = s === "all", tfOk = n === "1";
-  $("metric").querySelector('[value=tf]').disabled = !tfOk;
-  let metric = $("metric").value; if (!tfOk) { metric = "df"; $("metric").value = "df"; }
-  const q = $("q").value.trim().toLowerCase(), N = +$("top").value, hide = $("stop").checked;
-  let rows = d.top.map(r => ({term: r[0], df: r[1], tf: r[2]})).filter(r => (!hide || !allStop(r.term)) && (!q || r.term.includes(q)));
-  rows.sort((a, b) => b[metric] - a[metric] || (a.term < b.term ? -1 : 1));
-  rows = rows.slice(0, N);
-  const max = Math.max(1, ...rows.map(r => r[metric]));
-  if ($("order").value === "asc") rows.reverse();
-  const docs = isAll ? D.docs[t] : D.sections[t][s][0];
-  const exact = !isAll || n === "1";   // "tutte le sezioni" con parole singole: documenti veri; coppie e terne: somma sulle sezioni
+async function render(reset = true){
+  const my = ++token, t = $("tipo").value, s = $("sec").value, n = $("n").value;
+  $("metric").querySelector('[value=tf]').disabled = n !== "1";
+  if (n !== "1") $("metric").value = "df";
+  const metric = $("metric").value;
+  let d;
+  try { d = await load(`${t}|${s}|${n}`); }
+  catch (e) { $("list").innerHTML = `<div class="empty">Dati non trovati (${e.message}). Rigenera la pagina con conv/vocab_viz.py.</div>`; return; }
+  if (my !== token) return;
+  const q = $("q").value.trim().toLowerCase(), hide = $("stop").checked, page = +$("top").value;
+  const key = [t, s, n, metric, q, hide, $("order").value].join("|");
+  if (reset || cache.key !== key) {
+    let rows = d.rows.filter(r => (!hide || !allStop(r[0])) && (!q || r[0].includes(q)));
+    if (metric === "tf") rows = rows.slice().sort((a, b) => b[2] - a[2] || (a[0] < b[0] ? -1 : 1));
+    if ($("order").value === "asc") rows = rows.slice().reverse();
+    cache = {key, rows, i: metric === "tf" ? 2 : 1}; if (reset) shown = page;
+  }
+  const rows = cache.rows, i = cache.i, view = rows.slice(0, shown);
+  const isAll = s === "all", exact = !isAll || n === "1";
+  const docs = isAll ? IDX.docs[t] : IDX.sections[t][s][0];
+  const vmax = d.rows.reduce((m, r) => Math.max(m, r[i]), 1);
+  const w = v => $("scale").value === "log" ? 100 * Math.log10(v + 1) / Math.log10(vmax + 1) : 100 * v / vmax;
   const unit = metric === "tf" ? "occorrenze" : (exact ? "documenti" : "presenze nelle sezioni");
-  $("listTitle").textContent = `${rows.length} ${["parole","coppie di parole","terne di parole"][n-1]} più usate`;
+  const what = ["parole","coppie di parole","terne di parole"][n-1];
+  $("listTitle").textContent = $("order").value === "asc" ? `${what}, dalla meno usata` : `${what}, dalla più usata`;
   $("listSub").textContent = `${tipoName[t]} · ${isAll ? "tutte le sezioni" : "sezione " + s} · valore = ${unit}` +
-    (metric === "df" && exact ? ` (su ${fmt(docs)} documenti)` : "");
-  $("list").innerHTML = rows.length ? rows.map(r => {
-    const v = r[metric], pct = metric === "df" && exact ? ` title="${(100 * v / docs).toFixed(1)}% dei documenti"` : "";
-    return `<div class="row"${pct}><span class="t">${r.term}</span><span class="b"><i style="width:${100 * v / max}%"></i></span><span class="v">${fmt(v)}</span></div>`;
+    (metric === "df" && exact ? ` (su ${fmt(docs)} documenti)` : "") + ` · ${fmt(view.length)} di ${fmt(rows.length)}`;
+  $("list").innerHTML = view.length ? view.map(r => {
+    const v = r[i], tip = metric === "df" && exact ? ` title="${(100 * v / docs).toFixed(2)}% dei documenti"` : "";
+    return `<div class="row"${tip}><span class="t">${r[0]}</span><span class="b"><i style="width:${w(v)}%"></i></span><span class="v">${fmt(v)}</span></div>`;
   }).join("") : '<div class="empty">Nessun risultato.</div>';
+  $("more").hidden = shown >= rows.length;
+  $("more").textContent = `Mostra altre ${fmt(Math.min(page, rows.length - shown))}`;
 
-  const labels = D.bins.map((b, i) => i + 1 < D.bins.length ? `${fmt(b)}–${fmt(D.bins[i + 1] - 1)}` : `${fmt(b)}+`);
+  const labels = IDX.bins.map((b, k) => k + 1 < IDX.bins.length ? (b === IDX.bins[k + 1] - 1 ? fmt(b) : `${fmt(b)}–${fmt(IDX.bins[k + 1] - 1)}`) : `${fmt(b)}+`);
   const hmax = Math.log10(Math.max(...d.hist) + 1) || 1;
-  $("hist").innerHTML = d.hist.map((c, i) => `<div class="hrow"><span>${labels[i]}</span><span class="b"><i style="width:${100 * Math.log10(c + 1) / hmax}%"></i></span><span class="v">${fmt(c)}</span></div>`).join("");
+  $("hist").innerHTML = d.hist.map((c, k) => c ? `<div class="hrow"><span>${labels[k]}</span><span class="b"><i style="width:${100 * Math.log10(c + 1) / hmax}%"></i></span><span class="v">${fmt(c)}</span></div>` : "").join("");
   $("histSub").textContent = `Numero di ${["parole","coppie","terne"][n-1]} distinte per intervallo di ${exact ? "documenti" : "presenze nelle sezioni"} (barre in scala logaritmica).`;
-  const ss = D.sections[t], words = t === "ALL" ? D.totwords.ALL : isAll ? Object.values(ss).reduce((a, b) => a + b[1], 0) : ss[s][1];
+  const ss = IDX.sections[t], tw = t === "ALL" ? IDX.totwords.ALL : isAll ? Object.values(ss).reduce((a, b) => a + b[1], 0) : ss[s][1];
   $("stats").innerHTML = [[fmt(d.distinct), `${["parole","coppie","terne"][n-1]} distinte nel vocabolario`],
-    [fmt(docs), isAll ? "documenti" : "documenti con questa sezione"], [fmt(words), "parole in totale"],
-    [fmt(rows.length ? max : 0), "valore più alto mostrato"]]
+    [fmt(docs), isAll ? "documenti" : "documenti con questa sezione"], [fmt(tw), "parole in totale"],
+    [fmt(d.rows.length ? d.rows[d.rows.length - 1][1] : 0), "numero minimo di documenti"]]
     .map(x => `<div class="stat"><b>${x[0]}</b><span>${x[1]}</span></div>`).join("");
   $("note").textContent = n === "1" && isAll
-    ? "Parole in almeno 2 documenti, con il numero vero di documenti. La ricerca copre tutto questo vocabolario."
-    : "In una sezione la ricerca copre le " + (n === "1" ? "2.000 parole" : "300 coppie o terne") + " più usate; per le altre parole, o per trovare un nome raro, usa 'Tutte le sezioni' con 'Parole'. " +
-      "Soglie del vocabolario: parole in almeno 5 documenti della sezione, coppie e terne in almeno 20." + (isAll ? " Con 'Tutte le sezioni' coppie e terne si contano una volta per sezione." : "");
+    ? "Tutte le parole presenti in almeno 2 documenti, con il numero vero di documenti. La ricerca copre tutto questo vocabolario."
+    : "Soglie del vocabolario: parole in almeno 5 documenti della sezione, coppie e terne in almeno 20. Per le parole più rare, o per un nome commerciale, usa 'Tutte le sezioni' con 'Parole'." +
+      (isAll ? " Con 'Tutte le sezioni' coppie e terne si contano una volta per sezione." : "");
 }
 $("tipo").onchange = () => { fillSections(); render(); };
-["sec","n","metric","top","order","stop"].forEach(i => $(i).onchange = render);
-$("q").oninput = render;
+["sec","n","metric","top","order","scale","stop"].forEach(i => $(i).onchange = () => render());
+$("q").oninput = () => render();
+$("more").onclick = () => { shown += +$("top").value; render(false); };
 fillSections(); render();
 </script>
 </body>
