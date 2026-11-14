@@ -22,9 +22,9 @@ THRESHOLD = 0.95
 MARK = r"(#{1,6}\s*(\*\*\s*)?|\*\*\s*)"
 
 
-def heading_lines(md, tipo):
-    """Posizioni (inizio riga) dei titoli QRD: RCP prima occorrenza dopo la sezione precedente, FI l'ultima (l'indice
-    iniziale ripete i titoli); solo righe corte"""
+def heading_positions(md, tipo):
+    """{id sezione: offset della riga del titolo} per i titoli QRD: RCP prima occorrenza dopo la sezione precedente, FI
+    l'ultima (l'indice iniziale ripete i titoli); solo righe corte"""
     pats = section_patterns(tipo)
     last, found = -1, {}
     for k in sorted(pats, key=lambda k: [int(x) for x in k.split(".")] if tipo == "RCP" else [int(k[0])]):
@@ -33,7 +33,11 @@ def heading_lines(md, tipo):
         if c:
             last = c[-1] if tipo == "FI" else c[0]
             found[k] = last
-    return sorted(found.values())
+    return found
+
+
+def heading_lines(md, tipo):
+    return sorted(heading_positions(md, tipo).values())
 
 
 def pat_tail(p):
