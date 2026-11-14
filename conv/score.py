@@ -64,15 +64,18 @@ def section_patterns(tipo):
 
 
 def sections(pdf_text, md, tipo):
-    expected = found = 0
+    """(attesi, titoli marcati come intestazione o grassetto, titoli a inizio riga con o senza marcatura): olmOCR
+    scrive i titoli come righe semplici, e per dividere in sezioni basta anche quello"""
+    expected = marked = plain = 0
     for pat in section_patterns(tipo).values():
         if re.search(r"^\s*" + pat, pdf_text, re.M | (re.I if tipo == "FI" else 0)):
             expected += 1
             # titolo nel Markdown: a inizio riga, come intestazione (#), in grassetto o entrambi (## **4.1 …)
-            head = r"^\s*(#{1,6}\s*(\*\*\s*)?|\*\*\s*)"
-            found += bool(re.search(head + r"(\d+\.?\s*)?\**\s*" + pat.split(r"\.?", 1)[-1]
-                                    if tipo == "FI" else head + pat, md, re.M | re.I))
-    return expected, found
+            mark = r"(#{1,6}\s*(\*\*\s*)?|\*\*\s*)"
+            body = r"(\d+\.?\s*)?\**\s*" + pat.split(r"\.?", 1)[-1] if tipo == "FI" else pat
+            marked += bool(re.search(r"^\s*" + mark + body, md, re.M | re.I))
+            plain += bool(re.search(r"^\s*" + mark + "?" + body, md, re.M | re.I))
+    return expected, marked, plain
 
 
 def tables(md):
@@ -122,10 +125,10 @@ for conv in sorted(p.name for p in OUT.iterdir() if p.is_dir()):
             md = found[0].read_text(encoding="utf-8", errors="replace")
             got = words(strip_boilerplate(md_plain(md)))
             common = sum((ref & got).values())
-            exp, sec = sections(text, md, g["tipo"])
+            exp, sec, plain = sections(text, md, g["tipo"])
             tb = tables(md)
             r.update(recall=common / max(sum(ref.values()), 1), precision=common / max(sum(got.values()), 1),
-                     sections_expected=exp, sections_found=sec, tables=len(tb),
+                     sections_expected=exp, sections_found=sec, sections_plain=plain, tables=len(tb),
                      table_rows=sum(len(c) for c, _ in tb),
                      ragged_rows=sum(sum(n != c[0] for n in c[1:]) for c, _ in tb if c),
                      tables_with_watermark=sum(WM in t.lower() for _, t in tb), watermark=md.lower().count(WM))
@@ -137,10 +140,11 @@ df.to_csv(RES / "bakeoff_scores.csv", index=False)
 ok = df[df["converted"]]
 summary = ok.groupby("converter").agg(
     docs=("doc", "count"), pages=("pages", "sum"), recall=("recall", "mean"), precision=("precision", "mean"),
-    recall_min=("recall", "min"), sections_found=("sections_found", "sum"), sections_expected=("sections_expected", "sum"),
+    recall_min=("recall", "min"), sections_found=("sections_found", "sum"), sections_plain=("sections_plain", "sum"), sections_expected=("sections_expected", "sum"),
     tables=("tables", "sum"), table_rows=("table_rows", "sum"), ragged_rows=("ragged_rows", "sum"),
     tables_with_watermark=("tables_with_watermark", "sum"), watermark=("watermark", "sum"))
 summary["sections"] = summary["sections_found"] / summary["sections_expected"]
+summary["sections_any"] = summary["sections_plain"] / summary["sections_expected"]
 summary["ragged"] = summary["ragged_rows"] / summary["table_rows"].where(summary["table_rows"] > 0)
 times = OUT / "times.csv"
 if times.exists():   # tempo dell'ultima esecuzione di ogni converter, sul campione intero
@@ -148,6 +152,6 @@ if times.exists():   # tempo dell'ultima esecuzione di ogni converter, sul campi
     summary = summary.join(t[["version", "seconds", "status"]])
     summary["s_per_page"] = summary["seconds"] / summary["pages"]
 summary.to_csv(RES / "bakeoff_summary.csv")
-cols = [c for c in ["docs", "recall", "precision", "recall_min", "sections", "tables", "ragged", "tables_with_watermark",
+cols = [c for c in ["docs", "recall", "precision", "recall_min", "sections", "sections_any", "tables", "ragged", "tables_with_watermark",
                     "watermark", "seconds", "s_per_page", "status"] if c in summary]
 print(summary[cols].round(3).to_string())
