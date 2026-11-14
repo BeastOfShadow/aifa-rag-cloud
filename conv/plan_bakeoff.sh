@@ -6,6 +6,8 @@
 # Se uno fallisce si passa al successivo: l'esito è in conv/out/times.csv e il log in conv/out/<converter>.log.
 # RUN=<nome>: cartella dei risultati sul volume (default out), per non sovrascrivere un'esecuzione precedente;
 # SKIP_VLM=1: salta GraniteDocling (già escluso: butta tabelle e testo, e su GPU piccola è lentissimo).
+# ONLY="mineru olmocr" e IN_DIR=<cartella di PDF già puliti>: solo quei converter, su quei PDF (ripiego dei documenti
+# su cui Docling ha una recall bassa).
 cd "$(dirname "$0")/.."
 export PATH="$HOME/.local/bin:$PATH"
 W=/mnt/vol/conv                      # volume: ambienti e modelli non stanno nei 40 GB del disco della VM
@@ -13,7 +15,7 @@ export HF_HOME=$W/hf UV_CACHE_DIR=$W/uv-cache
 mkdir -p "$W/${RUN:-out}" "$W/venv"
 ln -sfn "$W/${RUN:-out}" conv/out
 RAW=$PWD/conv/data/pdf_gold
-IN=$PWD/conv/data/pdf_gold_clean      # senza il timbro AIFA (conv/clean.py): lo leggono tutti i converter tranne s3
+IN=${IN_DIR:-$PWD/conv/data/pdf_gold_clean}      # senza il timbro AIFA (conv/clean.py): lo leggono tutti i converter tranne s3
 OUT=$PWD/conv/out
 TIMES=$OUT/times.csv
 [ -f "$TIMES" ] || echo "converter,version,seconds,status" > "$TIMES"
@@ -53,22 +55,23 @@ run() {    # run <converter> <versione> <comando...>: tempo totale sul campione,
   echo "== $name: $s in $(($(date +%s) - t0)) s"
 }
 
-.venv/bin/python conv/clean.py "$RAW" "$IN"
+want() { [ -z "$ONLY" ] || [[ " $ONLY " == *" $1 "* ]]; }
+[ -n "$IN_DIR" ] || .venv/bin/python conv/clean.py "$RAW" "$IN"
 
 # 0. riferimento: la conversione attuale di s3 (pymupdf4llm) sui PDF scaricati, nell'ambiente del RAG di make deploy
-run s3 "pymupdf4llm $(.venv/bin/python -c 'import pymupdf4llm; print(pymupdf4llm.__version__)')" \
+want s3 && run s3 "pymupdf4llm $(.venv/bin/python -c 'import pymupdf4llm; print(pymupdf4llm.__version__)')" \
   .venv/bin/python -c "
 import pathlib, sys, pymupdf4llm
 for p in sorted(pathlib.Path('$RAW').glob('*.pdf')):
     (pathlib.Path('$OUT/s3') / (p.stem + '.md')).write_text(pymupdf4llm.to_markdown(str(p), show_progress=False))"
 
 # 1. Docling, pipeline standard: testo del PDF + modello di layout + TableFormer accurato, senza OCR
-venv docling docling==2.141.0 && \
+want docling && venv docling docling==2.141.0 && \
 run docling 2.141.0 "$W/venv/docling/bin/docling" --from pdf --to md --to json --no-ocr --table-mode accurate \
   --device cuda --image-export-mode placeholder --output "$OUT/docling" "$IN"
 
 # 2. Docling con il VLM GraniteDocling: legge le pagine come immagini
-[ -n "$SKIP_VLM" ] || run docling-vlm 2.141.0 "$W/venv/docling/bin/docling" --from pdf --to md --to json --pipeline vlm \
+[ -n "$SKIP_VLM" ] || ! want docling-vlm || run docling-vlm 2.141.0 "$W/venv/docling/bin/docling" --from pdf --to md --to json --pipeline vlm \
   --vlm-model granite_docling --device cuda --image-export-mode placeholder --output "$OUT/docling-vlm" "$IN"
 
 # 3. marker in modalità balanced: VLM surya per layout, OCR e tabelle. marker lo avvierebbe con l'immagine docker di
@@ -76,7 +79,7 @@ run docling 2.141.0 "$W/venv/docling/bin/docling" --from pdf --to md --to json -
 #    per una GPU da 80 o da 16 GB) e marker lo usa tramite SURYA_INFERENCE_URL. Il kernel GDN di flashinfer non si
 #    compila con il nvcc 12.6 dell'immagine, quindi uso quello triton. Il tempo non comprende l'avvio di vLLM
 S=$W/venv/surya-vllm/bin
-venv marker marker-pdf==2.0.0 && \
+want marker && venv marker marker-pdf==2.0.0 && \
 TORCH=cu129 venv surya-vllm "vllm @ $VLLM/v0.20.1/vllm-0.20.1+cu129-cp38-abi3-manylinux_2_31_x86_64.whl" \
   transformers==5.12.1 && {
   if [ "$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | head -1)" -gt 40000 ]; then
@@ -105,7 +108,7 @@ TORCH=cu129 venv surya-vllm "vllm @ $VLLM/v0.20.1/vllm-0.20.1+cu129-cp38-abi3-ma
 M=$W/venv/mineru/bin
 # docvortex (estrazione del testo nativo) è vincolato solo a <1: le 0.6 hanno cambiato l'interfaccia e il parse
 # fallisce, quindi fisso la versione uscita con MinerU 4.0.12
-TORCH=cu129 venv mineru "mineru[full]==4.0.12" docvortex==0.5.16 "vllm @ $VLLM/v0.28.0/vllm-0.28.0+cu129-cp38-abi3-manylinux_2_28_x86_64.whl" && (
+want mineru && TORCH=cu129 venv mineru "mineru[full]==4.0.12" docvortex==0.5.16 "vllm @ $VLLM/v0.28.0/vllm-0.28.0+cu129-cp38-abi3-manylinux_2_28_x86_64.whl" && (
   export LD_LIBRARY_PATH=$COMPAT PATH=$M:$PATH        # vLLM compila al volo con ninja, che sta nell'ambiente
   healthy() { "$M/mineru" server status --json | python3 -c \
     "import json, sys; sys.exit(not json.load(sys.stdin)['parse_server']['local']['healthy'])"; }
@@ -120,11 +123,11 @@ TORCH=cu129 venv mineru "mineru[full]==4.0.12" docvortex==0.5.16 "vllm @ $VLLM/v
 run mineru "4.0.12 advanced" bash -c "for f in '$IN'/*.pdf; do   # senza --pages converte solo le prime 10 pagine
   '$M/mineru' parse \"\$f\" --tier advanced --pages all --wait 1800 --output '$OUT/mineru'/\$(basename \"\$f\" .pdf).md || exit 1
 done"
-"$M/mineru" server stop > /dev/null 2>&1    # libera la GPU per olmOCR
+want mineru && "$M/mineru" server stop > /dev/null 2>&1    # libera la GPU per olmOCR
 
 # 5. olmOCR: VLM (Qwen2.5-VL addestrato per l'OCR) che riceve l'immagine della pagina e il testo del PDF; vuole una GPU
 #    da almeno 15 GB, quindi non gira sulla vGPU da 12 GB
-TORCH=cu129 venv olmocr "olmocr[gpu]==0.4.27" "vllm @ $VLLM/v0.11.2/vllm-0.11.2+cu129-cp38-abi3-manylinux1_x86_64.whl" && \
+want olmocr && TORCH=cu129 venv olmocr "olmocr[gpu]==0.4.27" "vllm @ $VLLM/v0.11.2/vllm-0.11.2+cu129-cp38-abi3-manylinux1_x86_64.whl" && \
 run olmocr 0.4.27 env LD_LIBRARY_PATH=$COMPAT PATH="$W/venv/olmocr/bin:$PATH" "$W/venv/olmocr/bin/olmocr" \
   "$W/olmocr-ws" --markdown --pdfs "$IN"/*.pdf && cp -r "$W/olmocr-ws/markdown/." "$OUT/olmocr/"
 
