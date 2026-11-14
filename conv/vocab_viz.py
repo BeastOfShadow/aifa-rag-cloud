@@ -31,7 +31,11 @@ def hist(g):
     return np.histogram(g.df, bins=BINS)[0].tolist()
 
 
-out = {"docs": docs, "bins": BINS[:-1], "data": {}, "sections": {}}
+out = {"docs": {"ALL": sum(docs.values()), **docs}, "bins": BINS[:-1], "data": {}, "sections": {"ALL": {}},
+       "totwords": {"ALL": int(words.sum())}}
+ga = t.groupby(["n", "term"], as_index=False).agg(df=("df", "sum"), tf=("tf", "sum"))      # FI e RCP insieme
+ga.loc[ga.n > 1, "tf"] = np.nan
+out["data"]["ALL"] = {"all": {str(n): {"top": top(gn, n), "hist": hist(gn), "distinct": int(len(gn))} for n, gn in ga.groupby("n")}}
 for tipo, gt in t.groupby("tipo"):
     out["data"][tipo] = {}
     ids = sorted((s for s in gt.section.unique() if s not in ("", "pre")),

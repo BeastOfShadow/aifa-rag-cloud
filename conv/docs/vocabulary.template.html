@@ -51,7 +51,7 @@ label.chk{flex-direction:row;align-items:center;gap:8px;font-size:14px;color:var
   <label>Lunghezza<select id="n"><option value="1">Parole</option><option value="2">Coppie di parole</option><option value="3">Terne di parole</option></select></label>
   <label>Conta<select id="metric"><option value="df">Documenti in cui compare</option><option value="tf">Occorrenze totali</option></select></label>
   <label>Quante<select id="top"><option>25</option><option selected>50</option><option>100</option><option>200</option><option>300</option></select></label>
-  <label>Ordine<select id="order"><option value="asc">Crescente</option><option value="desc">Decrescente</option></select></label>
+  <label>Ordine<select id="order"><option value="desc" selected>Decrescente</option><option value="asc">Crescente</option></select></label>
   <label>Cerca<input id="q" type="search" placeholder="es. pazienti"></label>
   <label class="chk"><input id="stop" type="checkbox" checked> Nascondi parole vuote (di, il, che…)</label>
 </div>
@@ -69,7 +69,7 @@ const D = /*DATA*/null;
 const STOP = new Set("di a da in con su per tra fra il lo la i gli le un uno una e ed o ma se che chi cui non è sono può possono al allo alla ai agli alle dal dallo dalla dai dagli dalle del dello della dei degli delle nel nello nella nei negli nelle sul sullo sulla sui sugli sulle come più anche ha hanno essere stato stata stati state viene vengono deve devono questo questa questi queste quello quella sia dopo prima durante tutti tutte ogni altri altre altro altra loro suo sua suoi sue ad ne si lei lui li mg ml".split(" "));
 const $ = id => document.getElementById(id);
 const fmt = n => n.toLocaleString("it-IT");
-const tipoName = {RCP:"RCP (per il medico)", FI:"FI (per il paziente)"};
+const tipoName = {ALL:"Tutti (FI + RCP insieme)", RCP:"RCP (per il medico)", FI:"FI (per il paziente)"};
 $("tipo").innerHTML = Object.keys(D.data).map(t => `<option value="${t}">${tipoName[t]||t}</option>`).join("");
 
 function fillSections(){
@@ -104,7 +104,7 @@ function render(){
   const hmax = Math.log10(Math.max(...d.hist) + 1) || 1;
   $("hist").innerHTML = d.hist.map((c, i) => `<div class="hrow"><span>${labels[i]}</span><span class="b"><i style="width:${100 * Math.log10(c + 1) / hmax}%"></i></span><span class="v">${fmt(c)}</span></div>`).join("");
   $("histSub").textContent = `Numero di ${["parole","coppie","terne"][n-1]} distinte per intervallo di ${isAll ? "presenze nelle sezioni" : "documenti"} (barre in scala logaritmica).`;
-  const ss = D.sections[t], words = isAll ? Object.values(ss).reduce((a, b) => a + b[1], 0) : ss[s][1];
+  const ss = D.sections[t], words = t === "ALL" ? D.totwords.ALL : isAll ? Object.values(ss).reduce((a, b) => a + b[1], 0) : ss[s][1];
   $("stats").innerHTML = [[fmt(d.distinct), `${["parole","coppie","terne"][n-1]} distinte nel vocabolario`],
     [fmt(docs), isAll ? "documenti" : "documenti con questa sezione"], [fmt(words), "parole in totale"],
     [fmt(rows.length ? max : 0), "valore più alto mostrato"]]
