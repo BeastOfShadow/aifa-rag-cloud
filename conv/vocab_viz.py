@@ -11,19 +11,20 @@ import pandas as pd
 
 CONV = Path(__file__).resolve().parent
 SRC = Path(sys.argv[1]) if len(sys.argv) > 1 else CONV / "out" / "vocab"
-TOP = 300                                         # termini tenuti per tipo, sezione e lunghezza
-BINS = [5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 10**9]
+LIM = {1: 2000, 2: 300, 3: 300}                   # termini tenuti per sezione, per lunghezza (la vista "tutte" tiene tutte le parole)
+BINS = [2, 3, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 10**9]
 
 t = pd.read_csv(SRC / "terms.csv", dtype={"section": str}, keep_default_na=False)
 t["tf"] = pd.to_numeric(t.tf, errors="coerce")
+glob = pd.read_csv(SRC / "terms_global.csv", keep_default_na=False)      # parole sull'intero documento, da 2 documenti
 sec = pd.read_csv(SRC / "sections.csv", dtype={"section": str}, keep_default_na=False)
 docs = {tipo: int(g.doc.nunique()) for tipo, g in sec.groupby("tipo")}
 words = sec.groupby(["tipo", "section"]).words.sum()
 ndocs = sec.groupby(["tipo", "section"]).doc.nunique()
 
 
-def top(g, n):
-    g = g.sort_values(["df", "term"], ascending=[False, True]).head(TOP)
+def top(g, limit):
+    g = g.sort_values(["df", "term"], ascending=[False, True]).head(limit)
     return [[a, int(b), None if pd.isna(c) else int(c)] for a, b, c in zip(g.term, g.df, g.tf)]
 
 
@@ -35,7 +36,14 @@ out = {"docs": {"ALL": sum(docs.values()), **docs}, "bins": BINS[:-1], "data": {
        "totwords": {"ALL": int(words.sum())}}
 ga = t.groupby(["n", "term"], as_index=False).agg(df=("df", "sum"), tf=("tf", "sum"))      # FI e RCP insieme
 ga.loc[ga.n > 1, "tf"] = np.nan
-out["data"]["ALL"] = {"all": {str(n): {"top": top(gn, n), "hist": hist(gn), "distinct": int(len(gn))} for n, gn in ga.groupby("n")}}
+
+
+def entry(g, limit):
+    return {"top": top(g, limit), "hist": hist(g), "distinct": int(len(g))}
+
+
+out["data"]["ALL"] = {"all": {str(n): entry(gn, LIM[n]) for n, gn in ga.groupby("n")}}
+out["data"]["ALL"]["all"]["1"] = entry(glob.groupby("term", as_index=False)[["df", "tf"]].sum(), None)
 for tipo, gt in t.groupby("tipo"):
     out["data"][tipo] = {}
     ids = sorted((s for s in gt.section.unique() if s not in ("", "pre")),
@@ -46,8 +54,9 @@ for tipo, gt in t.groupby("tipo"):
         if s == "all":     # somma sulle sezioni: parole = occorrenze vere; coppie e terne = presenze in sezioni
             g = g.groupby(["n", "term"], as_index=False).agg(df=("df", "sum"), tf=("tf", "sum"))
             g.loc[g.n > 1, "tf"] = np.nan
-        out["data"][tipo][s] = {str(n): {"top": top(gn, n), "hist": hist(gn), "distinct": int(len(gn))}
-                                for n, gn in g.groupby("n")}
+        out["data"][tipo][s] = {str(n): entry(gn, LIM[n]) for n, gn in g.groupby("n")}
+        if s == "all":
+            out["data"][tipo][s]["1"] = entry(glob[glob.tipo == tipo][["term", "df", "tf"]], None)
 html = (CONV / "docs" / "vocabulary.template.html").read_text(encoding="utf-8").replace(
     "/*DATA*/null", json.dumps(out, ensure_ascii=False, separators=(",", ":")))
 (CONV / "docs" / "vocabulary.html").write_text(html, encoding="utf-8")

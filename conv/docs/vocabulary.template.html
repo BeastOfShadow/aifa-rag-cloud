@@ -91,26 +91,29 @@ function render(){
   const max = Math.max(1, ...rows.map(r => r[metric]));
   if ($("order").value === "asc") rows.reverse();
   const docs = isAll ? D.docs[t] : D.sections[t][s][0];
-  const unit = metric === "tf" ? "occorrenze" : (isAll ? "presenze nelle sezioni" : "documenti");
+  const exact = !isAll || n === "1";   // "tutte le sezioni" con parole singole: documenti veri; coppie e terne: somma sulle sezioni
+  const unit = metric === "tf" ? "occorrenze" : (exact ? "documenti" : "presenze nelle sezioni");
   $("listTitle").textContent = `${rows.length} ${["parole","coppie di parole","terne di parole"][n-1]} più usate`;
   $("listSub").textContent = `${tipoName[t]} · ${isAll ? "tutte le sezioni" : "sezione " + s} · valore = ${unit}` +
-    (metric === "df" && !isAll ? ` (su ${fmt(docs)} documenti)` : "");
+    (metric === "df" && exact ? ` (su ${fmt(docs)} documenti)` : "");
   $("list").innerHTML = rows.length ? rows.map(r => {
-    const v = r[metric], pct = metric === "df" && !isAll ? ` title="${(100 * v / docs).toFixed(1)}% dei documenti"` : "";
+    const v = r[metric], pct = metric === "df" && exact ? ` title="${(100 * v / docs).toFixed(1)}% dei documenti"` : "";
     return `<div class="row"${pct}><span class="t">${r.term}</span><span class="b"><i style="width:${100 * v / max}%"></i></span><span class="v">${fmt(v)}</span></div>`;
   }).join("") : '<div class="empty">Nessun risultato.</div>';
 
   const labels = D.bins.map((b, i) => i + 1 < D.bins.length ? `${fmt(b)}–${fmt(D.bins[i + 1] - 1)}` : `${fmt(b)}+`);
   const hmax = Math.log10(Math.max(...d.hist) + 1) || 1;
   $("hist").innerHTML = d.hist.map((c, i) => `<div class="hrow"><span>${labels[i]}</span><span class="b"><i style="width:${100 * Math.log10(c + 1) / hmax}%"></i></span><span class="v">${fmt(c)}</span></div>`).join("");
-  $("histSub").textContent = `Numero di ${["parole","coppie","terne"][n-1]} distinte per intervallo di ${isAll ? "presenze nelle sezioni" : "documenti"} (barre in scala logaritmica).`;
+  $("histSub").textContent = `Numero di ${["parole","coppie","terne"][n-1]} distinte per intervallo di ${exact ? "documenti" : "presenze nelle sezioni"} (barre in scala logaritmica).`;
   const ss = D.sections[t], words = t === "ALL" ? D.totwords.ALL : isAll ? Object.values(ss).reduce((a, b) => a + b[1], 0) : ss[s][1];
   $("stats").innerHTML = [[fmt(d.distinct), `${["parole","coppie","terne"][n-1]} distinte nel vocabolario`],
     [fmt(docs), isAll ? "documenti" : "documenti con questa sezione"], [fmt(words), "parole in totale"],
     [fmt(rows.length ? max : 0), "valore più alto mostrato"]]
     .map(x => `<div class="stat"><b>${x[0]}</b><span>${x[1]}</span></div>`).join("");
-  $("note").textContent = "Il vocabolario tiene solo i termini frequenti: parole in almeno 5 documenti, coppie e terne in almeno 20. " +
-    "Con 'Tutte le sezioni' i documenti si contano una volta per sezione. La ricerca guarda solo ai 300 termini più usati di ogni vista.";
+  $("note").textContent = n === "1" && isAll
+    ? "Parole in almeno 2 documenti, con il numero vero di documenti. La ricerca copre tutto questo vocabolario."
+    : "In una sezione la ricerca copre le " + (n === "1" ? "2.000 parole" : "300 coppie o terne") + " più usate; per le altre parole, o per trovare un nome raro, usa 'Tutte le sezioni' con 'Parole'. " +
+      "Soglie del vocabolario: parole in almeno 5 documenti della sezione, coppie e terne in almeno 20." + (isAll ? " Con 'Tutte le sezioni' coppie e terne si contano una volta per sezione." : "");
 }
 $("tipo").onchange = () => { fillSections(); render(); };
 ["sec","n","metric","top","order","stop"].forEach(i => $(i).onchange = render);
