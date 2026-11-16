@@ -14,7 +14,7 @@ DATA = Path(os.environ.get("DATA_DIR", ROOT / "data"))  # override per pilot/ben
 PDF_DIR = DATA / "pdf"
 MD_DIR = DATA / "md"
 DB_PATH = DATA / "farmaci.sqlite"
-CHROMA_DIR = DATA / "chroma"
+CHROMA_DIR = Path(os.environ.get("CHROMA_DIR", DATA / "chroma"))  # es. data/chroma_gemma per EmbeddingGemma 2
 CHROMA_COLLECTION = "stampati"
 
 for d in (DATA, PDF_DIR, MD_DIR):
@@ -37,7 +37,7 @@ HTTP_RETRIES = 3
 USER_AGENT = "farmaci-rag-research/0.1 (local; contact 20051767@studenti.uniupo.it)"
 
 # ---- embeddings (LOCALE) ----
-EMBED_MODEL = "BAAI/bge-m3"  # multilingua, long context, buono su italiano/medico
+EMBED_MODEL = os.environ.get("EMBED_MODEL", "BAAI/bge-m3")  # multilingua, long context, buono su italiano/medico
 EMBED_DIM = 1024
 EMBED_BATCH = int(os.environ.get("EMBED_BATCH", "64"))  # H100: EMBED_BATCH=256
 

@@ -126,7 +126,8 @@ def build():
     # embed (testo con contesto) + add a chroma (documento raw)
     for i in tqdm(range(0, len(texts), 256), desc="embed+index", unit="batch"):
         sl = slice(i, i + 256)
-        emb = model.encode(embed_texts[sl], batch_size=EMBED_BATCH,
+        # encode_document: prefisso "document" se il modello lo prevede (EmbeddingGemma), nessuno per bge-m3
+        emb = model.encode_document(embed_texts[sl], batch_size=EMBED_BATCH,
                            normalize_embeddings=True, show_progress_bar=False)
         coll.add(ids=ids[sl], documents=texts[sl], metadatas=metas[sl],
                  embeddings=emb.tolist())

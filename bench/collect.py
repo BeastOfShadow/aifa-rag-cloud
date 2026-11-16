@@ -18,7 +18,11 @@ for percorso in percorsi:
     run_dir = percorso.parent
 
     if not df.empty:
-        df["sample"] = Path(os.readlink(run_dir / "data/pdf")).parent.name
+        # split-cpu scarica i PDF nel run stesso (cartella, non collegamento): corpus completo.
+        # I campioni con i soli Markdown (split-gpu, emb-gpu-*) sono lo stesso corpus di quelli con i PDF
+        pdf = run_dir / "data/pdf"
+        sample = Path(os.readlink(pdf)).parent.name if pdf.is_symlink() else "full"
+        df["sample"] = {"split": "full", "full_md": "full", "n500md": "n500"}.get(sample, sample)
         con = sqlite3.connect(run_dir / "data/farmaci.sqlite")
         df["n_docs"] = con.execute("SELECT COUNT(*) FROM docs WHERE md_path IS NOT NULL").fetchone()[0]
         con.close()

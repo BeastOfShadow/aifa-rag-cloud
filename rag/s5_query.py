@@ -38,7 +38,7 @@ def retrieve(question: str, k: int = TOP_K, n: int = RETRIEVE_N,
              where: dict | None = None):
     """2-stadi: dense top-n -> rerank -> top-k. where es: {'tipo': 'RCP'}."""
     model, reranker, coll = _lazy()
-    qemb = model.encode([question], normalize_embeddings=True)[0].tolist()
+    qemb = model.encode_query([question], normalize_embeddings=True)[0].tolist()
     res = coll.query(query_embeddings=[qemb], n_results=n, where=where)
     cands = [{"text": d, "meta": m, "dense": round(1 - dist, 3)}
              for d, m, dist in zip(res["documents"][0], res["metadatas"][0],
