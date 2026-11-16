@@ -12,19 +12,26 @@ local vs cloud, CPU vs GPU configurations. The full report, in Italian, is
 
 ## Results at a glance
 
-- **Provisioning as code:** a VM on Chameleon Cloud is reachable in ~70 s with `make lease up`
-  (vs ~7 min by hand in the dashboard) and ready for measurements in ~5 min; `make down` releases
-  everything in 19 s.
-- **PDF → Markdown (s3)** scales almost linearly on cloud VMs (efficiency 0.86 at 16 workers), but
-  stops at 2 workers on an Apple M4.
-- **Embedding (s4)** on an H100 is ~30× faster than the M4 CPU and ~88× faster than an 8 vCPU VM.
-- **Full corpus on one H100 VM:** 2 h 40 min download, 35 min conversion, 2 h 44 min embedding.
-  The GPU sits idle 54% of the time; moving download and conversion to a CPU VM cuts the estimated
-  cost by ~45%.
-- **Provider matters more than architecture:** s3 + s4 on the full corpus costs from €11.77 (H100 on
-  RunPod) to €33.10 (H100 on Azure).
+Measurements ran in two rounds; the second one, with the same software versions on every machine, is
+the one quoted here.
 
-![s3 speedup](docs/charts/s3_scaling.png)
+- **Provisioning as code:** a VM on Chameleon Cloud is reachable in ~70 s with `make lease up`
+  (vs ~7 min by hand in the dashboard) and ready for measurements in ~3.5 min; `make down` releases
+  everything in ~20 s.
+- **PDF → Markdown (s3)** scales almost linearly on cloud VMs (efficiency 0.87 at 16 workers). On an
+  Apple M4 it first stopped at 2 workers because of onnxruntime threads; after the fix 10 workers
+  match a 16 vCPU VM.
+- **Embedding (s4)** on an H100 is ~29× faster than the M4 CPU and ~86× faster than an 8 vCPU VM.
+- **Full corpus on one H100 VM:** 2 h 40 min download, 35 min conversion, 2 h 44 min embedding.
+  The GPU sits idle 54% of the time. Running conversion on a CPU VM and embedding on the H100 (done
+  end to end) costs 8–10% less but takes 63% longer; moving the download too cuts the cost by ~45%.
+- **Provider matters more than architecture:** s3 + s4 on the full corpus costs from €11.69 (H100 on
+  RunPod) to €32.89 (H100 on Azure).
+- **Queries (s5)** answer in 0.27 s on the H100 vs 4.3 s on the M4 GPU, but each costs 4–12× more.
+- **EmbeddingGemma 2** instead of bge-m3 indexes the full corpus 2.1× faster and retrieves the right
+  drug more often.
+
+![s3 speedup](docs/charts/s3_scaling_v2.png)
 
 ## Repository layout
 
@@ -87,6 +94,7 @@ and the retrieved chunks leave the machine.
 | `WORKERS` | all cores | s3 processes |
 | `DEVICE` | auto | s4/s5 device: `cuda`, `mps` or `cpu` |
 | `EMBED_BATCH` | `64` | s4 model batch size |
+| `EMBED_MODEL` | `BAAI/bge-m3` | s4/s5 embedding model; s5 must use the model that built the index |
 | `LLM_PROVIDER` / `LLM_MODEL` | `claude` / `claude-opus-4-8` | s5 generator |
 | `OLLAMA_MODEL` / `OLLAMA_HOST` | `qwen2.5:7b` / `http://localhost:11434` | s5 with Ollama |
 
@@ -102,11 +110,43 @@ CONFIG=local-cpu DEVICE=cpu bench/run.sh samples/n500        # s3 + s4 (s4 needs
 .venv/bin/python bench/collect.py                            # -> results/all.csv
 .venv/bin/python bench/cost_model.py                         # -> results/costs.csv, costs_split.csv
 .venv/bin/python bench/charts.py                             # -> docs/charts/*.png
+CONFIG=local-mps DEVICE=mps .venv/bin/python bench/s5_bench.py results/<config>/<run_id>/data  # s5 latency and retrieval quality
 ```
 
 Each run writes `results/<config>/<run_id>/`: `phases.csv` (start, end, seconds, commit, host,
 workers, device, batch), one log per phase, and on Linux `vmstat.txt` / `gpu.csv` (one sample per
 second). Prices and their sources are in `bench/prices.csv`.
+
+### Embedding map
+
+[docs/embedding-space.html](docs/embedding-space.html) is a single page: every point is a
+document (mean of its chunk vectors) in the space of bge-m3 or EmbeddingGemma 2, as a 3D PCA view and a
+2D t-SNE view. The buttons at the top pick the corpus (full corpus by default, or the sample) and the
+model. Clicking a document shows its 10 nearest documents, next to the s4/s5 numbers of both
+models, with a link to its PDF on AIFA and a button that shows its Markdown (`data/md`, from s3) in a
+window. The libraries come from a CDN, so it needs internet.
+
+The page can be opened as a file, but then the Markdown window only shows a message: from `file://` the
+browser cannot read other files on the disk. To read the texts, serve the page locally with `make map`,
+which links `data/md` as `docs/md`, serves `docs/` on `127.0.0.1` only and opens
+http://127.0.0.1:8000/embedding-space.html:
+
+```bash
+make map                              # local server with the texts; Ctrl-C to stop
+open docs/embedding-space.html        # as a file, without the texts (macOS; xdg-open on Linux)
+```
+
+To rebuild it, export the vectors of each run's Chroma index, then generate the page. Runs are named
+`emb-gpu-<model>` (sample) and `emb-gpu-full-<model>` (full corpus); vectors and indexes are not in the
+repository (too large), so this needs the `data/` folder of an s4 run.
+
+```bash
+.venv/bin/python bench/emb_export.py results/<config>/<run_id>/data results/<config>/<run_id>/vectors.npz
+.venv/bin/python bench/emb_viz.py    # all results/emb-gpu-*/*/vectors.npz -> docs/embedding-space.html
+```
+
+EmbeddingGemma 2 (`EMBED_MODEL=google/embeddinggemma-2`) needs newer libraries than `rag/constraints.txt`
+(measured with transformers 5.22.1, sentence-transformers 6.2.0, torchvision 0.29.1): use a separate venv.
 
 ## Cloud runs on Chameleon
 
@@ -133,13 +173,17 @@ make fetch down                # copy results to results/<config>/, destroy VM a
   (flavor ids from `openstack --os-cloud chameleon flavor list`).
 - Every target appends its duration to `results/infra_times.csv`.
 - A lease consumes Service Units for its whole duration: run `make down` as soon as the plan is done.
-- One VM at a time: there is a single Terraform state in `infra/`. `make lease` uses BSD `date -v`
-  (macOS); on Linux replace it with `date -d "+N hours"`.
+- Several VMs can run together: each lease has its own Terraform workspace, so every command for a VM
+  must carry its `LEASE_NAME`. The split configuration (s3 on a CPU VM, s4 on the H100, Markdown moved
+  with `make fetch-md` and `make push-md`) is described at the top of the `Makefile`.
+- `make lease` uses BSD `date -v` (macOS); on Linux replace it with `date -d "+N hours"`.
 
 ## Documentation
 
 - [docs/RELAZIONE.md](docs/RELAZIONE.md) — the report (Italian): method, manual vs IaC provisioning,
   results, cost model, limitations.
+- [docs/embedding-space.html](docs/embedding-space.html) — interactive map of the embedding space (see above).
+- [conv/](conv/README.md) — work in progress after the exam: a faithful PDF to Markdown conversion, sections and corpus vocabulary.
 - [APPROFONDIMENTO_IAC.md](APPROFONDIMENTO_IAC.md) — the original plan of the cloud extension.
 - [LAVORO_SVOLTO.md](LAVORO_SVOLTO.md) — log of the first version (baseline v0).
 

@@ -20,9 +20,9 @@ sudo apt-get install -y -qq git rsync curl ocrmypdf tesseract-ocr tesseract-ocr-
 
 echo "== 3. Python 3.13.4 + venv (uv: stessa versione del Mac, non il Python di Ubuntu) =="
 cd "$(dirname "$0")/.."          # -> radice progetto (aifa-rag-cloud/)
-command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/0.11.28/install.sh | sh
 export PATH="$HOME/.local/bin:$PATH"
-uv venv -q --python 3.13.4 .venv
+command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/0.11.28/install.sh | sh
+uv venv -q --allow-existing --python 3.13.4 .venv   # un secondo deploy sulla stessa VM riusa il venv
 . .venv/bin/activate
 # stessa versione fissata in requirements.txt, presa dall'indice della build giusta;
 # constraints.txt fissa anche le dipendenze indirette (transformers, numpy, ...)

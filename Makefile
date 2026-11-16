@@ -41,7 +41,7 @@ REMOTE         = cc@$(shell $(TF) output -raw ip 2>/dev/null)
 # Appends "<target>,start,end,seconds"; the recipe must set t0 first
 LOG_TIME       = t1=$$(date +%s) && { test -f $(TIMES) || echo "target,start,end,seconds" > $(TIMES); } && echo "$@,$$t0,$$t1,$$((t1-t0))" >> $(TIMES)
 
-.PHONY: lease up deploy bench fetch fetch-md push-md down ssh conv-push conv-fetch
+.PHONY: lease up deploy bench fetch fetch-md push-md down ssh map conv-push conv-fetch
 
 # Reserve the flavor and wait until the lease is ACTIVE.
 # date -v is BSD/macOS syntax (GNU/Linux: date -d "+N hours")
@@ -119,12 +119,13 @@ fetch-md:
 	  $(REMOTE):$(REPO)/results/$(CONFIG)/ results/$(CONFIG)/ && \
 	$(LOG_TIME)
 
-# Split configuration, GPU VM: Markdown and database of the latest $(SPLIT_FROM) run -> samples/split
+# Split configuration, GPU VM: Markdown and database of the latest $(SPLIT_FROM) run -> samples/split.
+# pdf/ stays empty but must exist: run.sh links it and config.py fails on a dangling link
 push-md:
 	@t0=$$(date +%s) && \
 	SRC=$$(ls -d results/$(SPLIT_FROM)/*/data/md | tail -1 | xargs dirname) && \
 	echo "push $$SRC" && \
-	$(SSH) $(REMOTE) 'mkdir -p $(REPO)/samples/split' && \
+	$(SSH) $(REMOTE) 'mkdir -p $(REPO)/samples/split/pdf' && \
 	rsync -a -e "$(SSH)" $$SRC/farmaci.sqlite $$SRC/md $(REMOTE):$(REPO)/samples/split/ && \
 	$(LOG_TIME)
 
@@ -139,6 +140,13 @@ down:
 
 ssh:
 	$(SSH) $(REMOTE)
+
+# Embedding map with the document texts: serves docs/ on localhost only, with data/md linked as docs/md
+# (from file:// the browser cannot read local files). Ctrl-C to stop.
+map:
+	ln -sfn ../data/md docs/md
+	(sleep 1 && python3 -m webbrowser -t http://127.0.0.1:8000/embedding-space.html) &
+	python3 -m http.server 8000 --bind 127.0.0.1 -d docs
 
 # New conversion pipeline (conv/README.md), on a GPU VM started with PLAN=conv/plan_bakeoff.sh:
 # the PDFs of the gold set (conv/gold.csv, columns cod and tipo) to the VM, then the converter outputs back

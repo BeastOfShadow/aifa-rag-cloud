@@ -1,0 +1,8 @@
+documenti md: 972
+carico modello google/embeddinggemma-2 su device=cuda (prima volta scarica ~2GB)...
+Loading weights:   0%|          | 0/1376 [00:00<?, ?it/s]Loading weights: 100%|██████████| 1376/1376 [00:00<00:00, 7095.46it/s]
+chunking:   0%|          | 0/972 [00:00<?, ?doc/s]chunking: 100%|██████████| 972/972 [00:01<00:00, 604.73doc/s]
+chunk totali: 31365
+embed+index:   0%|          | 0/123 [00:00<?, ?batch/s]embed+index:  24%|██▍       | 30/123 [00:30<01:34,  1.02s/batch]embed+index:  24%|██▍       | 30/123 [00:45<01:34,  1.02s/batch]embed+index:  49%|████▉     | 60/123 [01:00<01:03,  1.02s/batch]embed+index:  49%|████▉     | 60/123 [01:15<01:03,  1.02s/batch]embed+index:  74%|███████▍  | 91/123 [01:30<00:31,  1.01batch/s]embed+index:  74%|███████▍  | 91/123 [01:46<00:31,  1.01batch/s]embed+index:  98%|█████████▊| 121/123 [02:01<00:01,  1.00batch/s]embed+index: 100%|██████████| 123/123 [02:02<00:00,  1.00batch/s]
+
+Chroma pronto: /home/cc/emb/aifa-rag-cloud/results/emb-gpu-embeddinggemma-2/20261031T100123/data/chroma | collection 'stampati' count=31365

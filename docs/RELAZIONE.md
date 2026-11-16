@@ -1,7 +1,7 @@
 # Infrastructure as Code e confronto costi/prestazioni per una pipeline RAG sui documenti AIFA
 
 **Simone Negro** — matricola 20051767 — Università del Piemonte Orientale
-Progetto per il corso del prof. Massimo Canonico — 30/10/2026
+Progetto per il corso del prof. Massimo Canonico — 01/11/2026
 
 ---
 
@@ -9,15 +9,19 @@ Progetto per il corso del prof. Massimo Canonico — 30/10/2026
 
 Il progetto parte da una pipeline RAG (*Retrieval-Augmented Generation*) costruita sui Foglietti Illustrativi (FI) e sui Riassunti delle Caratteristiche del Prodotto (RCP) pubblicati da AIFA. La pipeline converte circa 18.000 documenti da PDF a Markdown, li divide in circa 805.000 frammenti e li indicizza in un database vettoriale. Una prima versione ha eseguito l'elaborazione su una VM di Chameleon Cloud con GPU H100, configurata a mano. Questa relazione descrive l'estensione concordata di rendere il provisioning riproducibile come codice (*infrastructure as code*) e, in seguito, di confrontare tempi e costi di configurazioni diverse, locali e cloud, con e senza GPU.
 
+Le misure le ho eseguite in due tornate. Dopo la prima ho allineato le versioni del software su tutte le macchine e ho ripetuto tutto, eseguendo davvero anche la configurazione eterogenea. I numeri qui sotto sono quelli della seconda tornata.
+
 I risultati principali sono:
-- con Terraform e un Makefile la VM è raggiungibile in **~70 secondi**, contro i ~7 minuti della procedura manuale dalla dashboard di Chameleon Cloud. La VM è pronta per le misure in **~5 minuti**, mentre la distruzione (~20 s) rilascia tutte le risorse, compreso l'IP pubblico che a mano era stato dimenticato (§5);
-- la conversione dei file da PDF a Markdown (fase s3) scala quasi linearmente sulle VM cloud (efficienza 0,92 con 8 worker), mentre sul Mac si ferma a 2 worker (§7.1–7.2);
-- l'embedding (fase s4) sulla H100 è ~30 volte più veloce della CPU del Mac e 51–88 volte più veloce delle VM da 16 e 8 vCPU: per il corpus completo servono 2 h 44 min contro giorni (§7.3);
+- con Terraform e un Makefile la VM è raggiungibile in **~70 secondi**, contro i ~7 minuti della procedura manuale dalla dashboard di Chameleon Cloud. La VM è pronta per le misure in **~3,5 minuti** (5 minuti nella prima tornata, prima di installare l'ambiente con uv), mentre la distruzione (~20 s) rilascia tutte le risorse, compreso l'IP pubblico che a mano era stato dimenticato (§5);
+- la conversione dei file da PDF a Markdown (fase s3) scala quasi linearmente sulle VM cloud (efficienza di almeno 0,92 con 8 worker). Sul Mac all'inizio si fermava a 2 worker, per i thread interni di una libreria, e dopo la correzione converte il campione con 10 worker quanto una VM da 16 vCPU (§7.1–7.2);
+- l'embedding (fase s4) sulla H100 è ~29 volte più veloce della CPU del Mac e 53–86 volte più veloce delle VM da 16 e 8 vCPU: per il corpus completo servono 2 h 43 min contro giorni (§7.3);
 - nella configurazione monolitica la GPU resta inutilizzata per il **54%** del tempo pagato (download e conversione), argomento che va a favore della configurazione eterogenea (§7.4);
-- il campione fisso **sottostima** il corpus completo del 25% (s3) e del 36% (s4), perché i suoi documenti hanno frammenti più corti (§7.5);
-- separare le fasi (s3 su una VM solo CPU, s4 sulla GPU) riduce il costo di s3 + s4 sul corpus completo del 10–12%, al prezzo di un tempo maggiore del 46%. Inoltre, spostando anche il download sulla VM CPU il risparmio sale al 45–47% (§7.6);
-- il fornitore pesa più dell'architettura: s3 + s4 sul corpus completo costano da 11,77 € (H100 su RunPod) a 33,10 € (H100 su Azure) (§7.6);
-- l'overhead fisso di ~5 minuti aumenta del 78% il costo di un run sul campione con la H100 e del 2,4% quello sul corpus completo. In tempo, il cloud batte il Mac già sopra ~30 documenti, mentre riguardo al costo in euro, il Mac resta più economico a ogni dimensione, con lo svantaggio che il corpus completo gli richiederebbe ~3,7 giorni (§7.7).
+- il campione fisso **sottostima** il corpus completo dal 25% al 56% per s3, a seconda della macchina, e del 36–37% per s4, perché i suoi documenti hanno frammenti più corti (§7.5);
+- la configurazione eterogenea eseguita sul corpus completo (s3 su una VM solo CPU, s4 sulla GPU) costa l'8–10% in meno della monolitica, ma impiega il 63% di tempo in più. Spostando anche il download sulla VM CPU il risparmio sale al 44–46% (§7.6);
+- il fornitore pesa più dell'architettura: s3 + s4 sul corpus completo costano da 11,69 € (H100 su RunPod) a 32,89 € (H100 su Azure) (§7.6);
+- l'overhead fisso di ~3,5 minuti aumenta del 57% il costo di un run sul campione con la H100 e dell'1,8% quello sul corpus completo. In tempo, il cloud batte il Mac già sopra ~25 documenti, mentre riguardo al costo in euro, il Mac resta più economico a ogni dimensione, con lo svantaggio che il corpus completo gli richiederebbe ~3,4 giorni (§7.7);
+- per rispondere a una domanda (fase s5) la H100 è 16 volte più veloce del Mac, ma ogni domanda costa da 4 a 12 volte di più, quindi per un uso personale conviene il locale (§7.8);
+- con EmbeddingGemma 2 al posto di bge-m3 l'indicizzazione del corpus completo è 2,1 volte più veloce, e la ricerca trova più spesso il farmaco giusto (§7.9).
 
 ---
 
@@ -85,7 +89,7 @@ Durante l'indicizzazione ho deciso di togliere il testo legale che AIFA ripete i
 
 #### 2.2.5 s5, interrogazione
 
-Infine c'è la fase di interrogazione, in cui la domanda diventa un vettore con lo stesso modello usato in s4 e vengono recuperati i 30 frammenti più vicini. Un secondo modello (*reranker*), più lento ma più preciso, rilegge ogni coppia domanda–frammento e tiene i 6 migliori. Questi passano al modello linguistico (Claude, oppure un modello locale con Ollama) che si occuperà di rispondere solo in base ai frammenti, dicendo se l'informazione manca e citando sempre il farmaco da cui la prende.
+Infine c'è la fase di interrogazione, in cui la domanda diventa un vettore con lo stesso modello usato in s4 e vengono recuperati i 30 frammenti più vicini. Un secondo modello (*reranker*), più lento ma più preciso, rilegge ogni coppia domanda–frammento e tiene i 6 migliori. Questi passano al modello linguistico (Claude, oppure un modello locale con Ollama), a cui chiedo nel prompt di rispondere solo in base ai frammenti, di dire se l'informazione manca e di citare sempre il farmaco da cui la prende.
 
 ---
 
@@ -105,7 +109,7 @@ Risultati (commit `93b93de`, tag `baseline-v0`):
 |---|---|---|
 | s3, 17.959 documenti | 37 min | 48 processi paralleli, OCR attivo |
 | s4, 804.995 chunk | ~2,5 h | batch 256; durata osservata, non misurata in modo controllato |
-| s5, latenza per domanda | — | eseguita in locale: ~4,5 s con MPS, ~17,7 s su sola CPU |
+| s5, latenza per domanda | — | eseguita in locale: ~4,5 s con MPS, ~17,7 s su sola CPU (misurata poi anche sul cloud, §7.8) |
 
 Limiti di questa versione, che motivano l'estensione:
 - provisioning manuale e non versionato;
@@ -133,7 +137,13 @@ Una configurazione è la combinazione di macchina e dispositivo su cui eseguo la
 | `cloud-cpu-l` | Chameleon KVM@TACC, flavor `m1.xxlarge` | 16 vCPU Intel Haswell, 32 GB; creata con l'IaC |
 | `cloud-gpu` | Chameleon KVM@TACC, flavor `g1.h100.pci.1` | 1× H100 94 GB, 48 vCPU Xeon Platinum 8468, 250 GB |
 | `cloud-gpu-full` | come `cloud-gpu` | corpus completo, una esecuzione |
-| `cloud-split` | `cloud-cpu-l` per s3 + `cloud-gpu` per s4 | calcolata dai tempi per fase, non eseguita (§7.6) |
+| `cloud-split` | `cloud-cpu-l` per s3 + `cloud-gpu` per s4 | calcolata dai tempi per fase (§7.6) |
+| `local-cpu-ocr-1t` | Mac mini M4 (2024) | come `local-cpu-ocr`, con un thread per sessione di onnxruntime (§7.1.1) |
+| `local-cpu-v2`, `local-mps-v2`, `cloud-cpu-s-v2`, `cloud-cpu-l-v2`, `cloud-gpu-v2` | come senza suffisso | stesse misure ripetute con l'ambiente allineato (§4.4) |
+| `split-cpu` | come `cloud-cpu-l` | s1, s2 e s3 sul corpus completo con 16 worker |
+| `split-gpu` | come `cloud-gpu` | s4 sul corpus completo con i Markdown di `split-cpu`, poi s5 |
+| `emb-gpu-bge-m3`, `emb-gpu-embeddinggemma-2` | come `cloud-gpu` | s4 e s5 sul campione già convertito, con bge-m3 o con EmbeddingGemma 2 (§7.9) |
+| `emb-gpu-full-bge-m3`, `emb-gpu-full-embeddinggemma-2` | come `cloud-gpu` | come sopra sul corpus completo; per bge-m3 l'indice è quello di `split-gpu` |
 
 Nel piano iniziale avevo previsto 48 vCPU per `cloud-cpu-l`, ma su KVM@TACC il flavor con solo CPU più grande è `m1.xxlarge`, che ne ha 16 (§5.1). Lo scaling di s3 fino a 48 processi è stato misurato sulla VM GPU, che ha 48 vCPU ma un processore diverso (§7.2, §9).
 
@@ -163,6 +173,8 @@ Per ottenere i dati, ho eseguito il seguente protocollo:
 - versioni bloccate in `rag/requirements.txt`; l'interprete e PyTorch dipendono dalla macchina: Python 3.13.4 e PyTorch 2.13.0 in locale, Python 3.12.3 e PyTorch 2.14.1 su `cloud-cpu-s` e `cloud-gpu` (build CPU e CUDA 12.6), PyTorch 2.15.0 su `cloud-cpu-l` (§9);
 - macchina locale con la sospensione di sistema disattivata (`caffeinate -i`);
 - s4 su CPU e su MPS misurata con una sola ripetizione per la durata (da 2,4 h a 6,9 h); per run così lunghi la variabilità relativa attesa è bassa, e sulle VM cloud lo scarto tra ripetizioni è rimasto sotto l'1% per s4 (§7.3).
+
+Dopo la prima tornata di misure ho allineato gli ambienti e ho ripetuto tutte le misure, nelle configurazioni con suffisso `-v2`. Ora ogni macchina usa Python 3.13.4, installato con uv [17], e PyTorch 2.14.1 nella build per CPU, CUDA 12.6 o macOS. Tutte le altre dipendenze sono fissate in `rag/constraints.txt`, generato dal virtualenv del Mac, quindi le librerie che convertono e indicizzano i documenti hanno la stessa versione ovunque. Le misure `-v2` sono partite tutte dallo stesso commit tra il 30 e il 31/10, con le VM in parallelo.
 
 ---
 
@@ -278,7 +290,7 @@ Nella procedura manuale `samples/n500.tar.gz` (294 MB) è copiato con `scp` (26�
 
 #### 5.3.3 Ambiente
 
-`chameleon/bootstrap.sh` installa i pacchetti di sistema (compreso Tesseract con la lingua italiana), crea il virtualenv e installa PyTorch nella build CPU o CUDA a seconda che sia presente `nvidia-smi` (~160 s). Il modello bge-m3 viene scaricato prima delle misure (~20 s), così il primo run di s4 non ne include il download.
+`chameleon/bootstrap.sh` installa i pacchetti di sistema (compreso Tesseract con la lingua italiana), crea il virtualenv e installa PyTorch nella build CPU o CUDA a seconda che sia presente `nvidia-smi` (~160 s). Per le misure `-v2` `bootstrap.sh` installa uv, che scarica Python 3.13.4 e installa PyTorch e le altre dipendenze con le versioni di `constraints.txt` (§4.4). uv scarica e installa i pacchetti in parallelo, e la configurazione della VM scende da 246 s a circa 145 s (§5.5). Il modello bge-m3 viene scaricato prima delle misure (~20 s), così il primo run di s4 non ne include il download.
 
 #### 5.3.4 Esecuzione
 
@@ -295,11 +307,11 @@ Il disco di sistema della VM GPU (40 GB, di cui ~9 GB liberi dopo l'installazion
 ![Creazione del volume Cinder](img/chameleon/18-volume-crea.png)
 *Creazione del volume da 50 GB per il full run.*
 
-Occupazione finale: PDF 6,1 GB, Markdown 1,1 GB, Chroma 12 GB, SQLite 115 MB, quindi ~19 GB, oltre il disco di sistema disponibile. Sul Mac sono tornati solo tempi, log e database (306 MB).
+Occupazione finale: PDF 6,1 GB, Markdown 1,1 GB, Chroma 12 GB, SQLite 115 MB, quindi ~19 GB, oltre il disco di sistema disponibile. Sul Mac sono tornati solo tempi, log e database (306 MB). Nella seconda tornata il volume lo crea Terraform insieme alla VM (§5.4).
 
 #### 5.3.7 Pulizia
 
-Floating IP e volume **non** vengono rilasciati alla scadenza o alla cancellazione del lease: dopo il run GPU sono rimasti allocati e sono stati eliminati a mano. Con la procedura automatica questo non succede per il floating IP, che Terraform rilascia con `make down`. Il volume invece non fa parte dell'automazione, perché per le misure sul campione non serve.
+Floating IP e volume **non** vengono rilasciati alla scadenza o alla cancellazione del lease: dopo il run GPU sono rimasti allocati e sono stati eliminati a mano. Con la procedura automatica questo non succede, perché Terraform rilascia il floating IP e distrugge il volume con `make down`.
 
 ### 5.4 Infrastruttura come codice
 
@@ -312,7 +324,9 @@ Una volta create a mano le prime due VM, ho proceduto con l'automatizzazione del
 | `make deploy` | `git bundle` + `tar` via SSH | copia codice e campione, esegue `bootstrap.sh`, scarica il modello bge-m3 |
 | `make bench` | `tmux` | avvia il piano di misure `bench/plan_<config>.sh` |
 | `make fetch` | `rsync` | copia i risultati in `results/<config>/` |
-| `make down` | Terraform + CLI OpenStack | distrugge VM, porta, security group, IP e lease |
+| `make fetch-md` | `rsync` | configurazione split, VM CPU: copia anche Markdown e database del corpus completo |
+| `make push-md` | `rsync` | configurazione split, VM GPU: invia i Markdown e il database ricevuti dalla VM CPU |
+| `make down` | Terraform + CLI OpenStack | distrugge VM, porta, security group, IP, volume e lease |
 
 Scelte di progetto:
 - **Lease fuori da Terraform.** Il provider OpenStack di Terraform copre i servizi standard (Nova, Neutron, Cinder) ma non Blazar, che è un'aggiunta di Chameleon. Il lease è quindi creato con la CLI `openstack reservation` e Terraform riceve solo l'id della prenotazione, che su KVM è anche l'id del flavor. L'infrastruttura è in parte **dichiarativa** (Terraform: stato desiderato, `plan`, `apply`, `destroy`) e in parte **imperativa** (comandi CLI); il Makefile le unisce. La libreria python-chi [13] avrebbe fatto lo stesso con più dipendenze.
@@ -322,24 +336,39 @@ Scelte di progetto:
 - **Chiavi host SSH non verificate.** Ogni VM ha una chiave host nuova e gli IP vengono riassegnati, quindi la verifica su `known_hosts` è disattivata. È accettabile per VM usa-e-getta raggiungibili solo con la chiave privata, non per macchine di lunga durata.
 - **Controlli.** `make up` si ferma prima di Terraform se il lease non esiste, per non lasciare risorse create a metà; `make deploy` si ferma se il piano di misure non è nel commit, perché il bundle porta solo i commit.
 - **Portabilità.** Il Make di macOS (GNU Make 3.81) non supporta `.ONESHELL`, quindi ogni ricetta è un'unica riga logica; `date -v` per la fine del lease è sintassi BSD (su Linux: `date -d`).
+- **Più VM in parallelo.** Terraform tiene lo stato di ogni VM in un *workspace* con il nome del lease, così ogni comando del Makefile lavora sulla VM del suo lease e più VM possono esistere insieme. Nella seconda tornata ho tenuto accese fino a quattro VM nello stesso momento.
+- **Volume e immagine come parametri.** Con `VOLUME_GB` Terraform crea un volume Cinder, che `make deploy` formatta e monta in `/mnt/vol` e su cui sposta campioni e risultati. Con `IMAGE` si sceglie l'immagine, per esempio quella con CUDA per la H100.
 
 ### 5.5 Confronto dei tempi
 
-Una volta creata l'automazione, ho proceduto con il confronto dei dati da `results/infra_times.csv` (due cicli completi tra il 29 e il 30/10/2026: un collaudo con distruzione immediata e il run `cloud-cpu-l`):
+Una volta creata l'automazione, ho proceduto con il confronto dei dati da `results/infra_times.csv`. Nella prima tornata ci sono due cicli completi tra il 29 e il 30/10/2026, un collaudo con distruzione immediata e il run `cloud-cpu-l`. Nella seconda, tra il 30 e il 31/10, ho creato con lo stesso Makefile quattro VM CPU (tre insieme) e la VM con la H100, che aveva anche un volume da 30 GB.
 
-| Passo | Manuale | IaC, collaudo | IaC, run `cloud-cpu-l` |
-|---|---|---|---|
-| lease `ACTIVE` | ~1–4 min | 27 s | 27 s |
-| VM raggiungibile via SSH | ~6,5–7 min dall'inizio | +42 s (69 s dall'inizio) | +44 s (71 s dall'inizio) |
-| configurazione (codice, campione, ambiente, modello) | ~3,7 min di comandi a mano | — | 246 s |
-| **pronta per le misure** | **~11 min**, più i passaggi manuali | — | **5 min 17 s** |
-| recupero dei risultati (`make fetch`) | `rsync` a mano | — | 7 s |
-| distruzione | a mano, IP e volume dimenticati | 19 s, nessun residuo | 21 s, nessun residuo |
+| Passo | Manuale | IaC, collaudo | IaC, run `cloud-cpu-l` | IaC, seconda tornata |
+|---|---|---|---|---|
+| lease `ACTIVE` | ~1–4 min | 27 s | 27 s | 26–28 s |
+| VM raggiungibile via SSH | ~6,5–7 min dall'inizio | +42 s (69 s dall'inizio) | +44 s (71 s dall'inizio) | +41–44 s, +85 s per la H100 con il volume |
+| configurazione (codice, campione, ambiente, modello) | ~3,7 min di comandi a mano | — | 246 s | 141–152 s (mediana 144 s), 126 s sulla H100 |
+| **pronta per le misure** | **~11 min**, più i passaggi manuali | — | **5 min 17 s** | **~3 min 34 s** per una VM CPU |
+| recupero dei risultati (`make fetch`) | `rsync` a mano | — | 7 s | 18–184 s, a seconda di quanti run |
+| distruzione | a mano, IP e volume dimenticati | 19 s, nessun residuo | 21 s, nessun residuo | 7–31 s, nessun residuo |
 
 Osservazioni:
-- Il guadagno è nel provisioning: da ~7 minuti a ~70 secondi, con due misure quasi identiche.
-- La configurazione dura quanto a mano (~4 minuti), perché è dominata dall'installazione di pacchetti e PyTorch, non dai tempi umani. È il prossimo punto da ottimizzare, per esempio con un'immagine personalizzata con l'ambiente già installato.
-- Rispetto al lavoro utile, l'overhead pagato (`make up` + `make deploy`, 290 s, §6) vale il 2,4% del full run sulla GPU (3,3 h di s3 + s4), ma quasi quanto l'intero run sul campione (6,2 minuti): è l'ingrediente dell'ipotesi H3 (§7.7, §8).
+- Il guadagno è nel provisioning: da ~7 minuti a ~70 secondi, con misure quasi identiche in tutti i cicli, anche con tre VM create nello stesso momento.
+- Nella prima tornata la configurazione durava quanto a mano (~4 minuti), perché è dominata dall'installazione di pacchetti e PyTorch, non dai tempi umani. Con uv (§5.3.3) scende a circa 2,4 minuti. Il passo successivo sarebbe un'immagine personalizzata con l'ambiente già installato.
+- Il volume della H100 aggiunge circa 40 s alla creazione, ma senza di esso il disco non basta per il corpus completo (§5.3.6).
+- Rispetto al lavoro utile, l'overhead pagato (`make up` + `make deploy`, §6) nella prima tornata era di 290 s e valeva il 2,4% del full run sulla GPU (3,3 h di s3 + s4), ma quasi quanto l'intero run sul campione (6,2 minuti). Nella seconda è di 187 s per una VM CPU e di 211 s per la VM GPU, e pesa l'1,8% sul full run. È l'ingrediente dell'ipotesi H3 (§7.7, §8).
+
+### 5.6 Cosa è andato storto nella seconda tornata
+
+Per la seconda tornata (§4.4) ho fatto partire le misure la sera, con degli script sul Mac che ogni 10 minuti controllavano se il piano di una VM era finito, scaricavano i risultati e solo dopo distruggevano la VM. Cinque errori mi hanno fatto perdere qualche ora, e li riporto perché dicono qualcosa su come si lavora con il cloud.
+
+- **Markdown nel posto sbagliato.** Per la configurazione split ho modificato `run.sh` in modo che usasse i Markdown già convertiti, se presenti nella cartella del campione. Il controllo però guardava solo se la cartella esisteva, e il campione ne aveva una vuota. Il primo run sul Mac ha quindi scritto i suoi Markdown nel campione condiviso, e i run successivi li hanno trovati già pronti, durando 0 secondi. Me ne sono accorto dai tempi, ho cancellato quei run, ho corretto `run.sh` (commit `fc80997`) e ho ripetuto la serie.
+- **VM cancellata alla scadenza del lease.** Lo script che controllava `split-cpu` cercava l'IP nello stato di Terraform senza indicare il workspace (§5.4), quindi non ha mai visto la fine del piano. Alla scadenza del lease Chameleon ha distrutto la VM insieme ai PDF e ai Markdown del corpus completo, che non avevo ancora scaricato. Alla fine di un lease la VM sparisce senza avviso, quindi i risultati vanno scaricati prima, e il lease va prenotato con un margine o prorogato (`openstack reservation lease set --prolong-for`).
+- **Lease duplicati.** Lo script che creava le due VM `-v2` passava i parametri a make dentro una variabile di zsh, che a differenza di bash non la divide in parole. make ha usato il nome di lease predefinito per entrambe le VM, ha creato due lease con lo stesso nome e poi è rimasto bloccato tutta la notte, perché la CLI non sapeva quale dei due scegliere. La mattina ho rinominato e prorogato i lease, così le prenotazioni non sono andate perse.
+- **Secondo deploy sulla stessa VM.** Sulla H100 ho eseguito prima `cloud-gpu-v2` e poi `split-gpu`, quindi la seconda configurazione ha ripetuto `make deploy` su una VM già pronta. Il nuovo `bootstrap.sh` crea il virtualenv con uv, che si ferma se il virtualenv esiste già. Il codice era già allo stesso commit e l'ambiente era già installato, quindi ho saltato il deploy, e poi ho corretto `bootstrap.sh` perché riusi il virtualenv esistente.
+- **Cartella dei PDF mancante.** Sulla VM GPU della configurazione split arrivano solo i Markdown e il database, non i PDF. `run.sh` però collega comunque la cartella dei PDF del campione, e `config.py` si ferma se trova un collegamento a una cartella che non esiste. Sul Mac non era emerso perché i campioni su cui avevo provato avevano i PDF. Ho creato la cartella vuota sulla VM e ho corretto `make push-md`, che ora la crea da sé.
+
+In tutti e cinque i casi l'infrastruttura come codice ha reso il recupero veloce, perché ricreare e configurare una VM richiede pochi minuti. Il costo è stato una notte di SU su tre lease, due fermi e uno con il lavoro perso, e qualche ora di ritardo sulla configurazione split.
 
 ---
 
@@ -354,7 +383,7 @@ costo_locale = ore × (ammortamento_orario + potenza_kW × prezzo_kWh)
 
 Il costo si calcola sulla **durata del processo più l'overhead** di provisioning e configurazione (§5.5), non sulla durata del lease: su un cloud commerciale si paga l'istanza accesa e la si spegne a fine lavoro, e con l'automazione lo spegnimento è immediato. La durata del lease conta invece per le SU di Chameleon, che non hanno un prezzo in euro.
 
-L'overhead per VM cloud è il tempo di `make up` + `make deploy` misurato il 29/10/2026: (44 + 246) s = **0,0806 h**, nella colonna `overhead_h` di `bench/prices.csv`. Il lease di Chameleon non ha equivalente nei cloud commerciali e non è contato. Il valore è misurato su una VM CPU e assunto uguale per la VM GPU, dove la configurazione manuale aveva durata simile (§5.3). La configurazione eterogenea usa due VM e paga l'overhead due volte; in locale l'overhead è nullo.
+L'overhead per VM cloud è il tempo di `make up` + `make deploy`. Nella prima tornata l'ho misurato il 29/10/2026 su una VM CPU, (44 + 246) s = **0,0806 h**, nella colonna `overhead_h` di `bench/prices.csv`, e l'ho assunto uguale per la VM GPU, dove la configurazione manuale aveva durata simile (§5.3). Nella seconda tornata l'ho misurato separatamente per i due tipi di VM, con le mediane di `results/infra_times.csv`: (42,5 + 144) s = **0,0518 h** per una VM CPU e (85 + 126) s = **0,0586 h** per la VM GPU, nella colonna `overhead_v2_h`. I costi di ogni tornata usano il suo overhead. Il lease di Chameleon non ha equivalente nei cloud commerciali e non è contato. La configurazione eterogenea usa due VM e paga l'overhead due volte; in locale l'overhead è nullo.
 
 ### 6.1 Costo orario della macchina locale
 
@@ -401,7 +430,9 @@ Per GCP una VM con una sola H100 (a3-highgpu-1g) non è disponibile on-demand. I
 
 ## 7. Risultati
 
-In questo capitolo presento i risultati delle misure. Parto dalla conversione dei PDF (s3), prima sul Mac e poi sulle VM cloud, per capire come scala all'aumentare dei worker. Poi passo all'embedding (s4) sui diversi dispositivi, al full run sul corpus completo e al confronto tra campione e corpus. Infine metto insieme tempi e prezzi per calcolare il costo di ogni configurazione e il punto di pareggio tra locale e cloud. Dove non è indicato diversamente, le misure sono fatte sul campione fisso di 972 documenti (§4.2).
+In questo capitolo presento i risultati delle misure. Parto dalla conversione dei PDF (s3), prima sul Mac e poi sulle VM cloud, per capire come scala all'aumentare dei worker. Poi passo all'embedding (s4) sui diversi dispositivi, al full run sul corpus completo e al confronto tra campione e corpus. Infine metto insieme tempi e prezzi per calcolare il costo di ogni configurazione e il punto di pareggio tra locale e cloud. Chiudo con il tempo di risposta a una domanda (s5) e con il confronto tra due modelli di embedding. Dove non è indicato diversamente, le misure sono fatte sul campione fisso di 972 documenti (§4.2).
+
+Le misure sono arrivate in due tornate. La prima l'ho eseguita tra il 21 e il 30/10, con versioni di Python e PyTorch diverse da macchina a macchina. Analizzando i risultati ho scoperto perché il Mac non scalava (§7.1.1), e a quel punto ho allineato gli ambienti (§4.4) e ho ripetuto tutte le misure tra il 30 e il 31/10. In questa seconda tornata ho anche eseguito davvero la configurazione eterogenea, che nella prima avevo solo calcolato, e ho misurato s5 sul cloud. Nelle tabelle riporto entrambe le tornate, così si vede quanto cambia ogni misura, mentre i costi e le conclusioni si basano sulla seconda.
 
 Per descrivere lo scaling uso due grandezze. Lo *speedup* dice quante volte un run con *p* worker è più veloce dello stesso run con un solo worker. L'*efficienza* divide lo speedup per il numero di worker e indica quanto viene sfruttato ogni worker aggiunto. Vale 1 se raddoppiando i worker il tempo si dimezza, e scende quando una parte del lavoro non si riesce a dividere tra i worker [6]. In formule, con T(p) il tempo con *p* worker, `S(p) = T(1) / T(p)` e `E(p) = S(p) / p`.
 
@@ -428,67 +459,121 @@ Osservazioni:
   
   b. i 6 core efficiency del M4 sono più lenti e diventano il collo di bottiglia;
   
-  c. banda di memoria condivisa tra CPU e GPU. La stessa pipeline sulle VM cloud scala quasi linearmente (§7.2), quindi il limite è della macchina, non del codice.
+  c. banda di memoria condivisa tra CPU e GPU. La stessa pipeline sulle VM cloud scala quasi linearmente (§7.2), quindi all'inizio pensavo che il limite fosse della macchina e non del codice.
 - Gli scarti alti con 4 e 8 worker (17–30%) sono dovuti all'uso del Mac durante quelle serie; la mediana ne attenua l'effetto.
 
-Configurazione locale migliore: 2 worker, 879 s.
+Configurazione locale migliore in questa prima serie: 2 worker, 879 s.
+
+#### 7.1.1 Perché il Mac non scalava
+
+Il risultato non mi convinceva, perché la stessa pipeline sulle VM scala quasi linearmente. Per questo ho verificato le ipotesi una alla volta, con piccoli test su 240 PDF del campione.
+
+**Calcolo puro.** Ho eseguito 40 operazioni identiche di solo calcolo, senza leggere file e con pochissima memoria, aumentando i processi da 1 a 10. Con 10 processi il tempo scende di 5,3 volte, quindi la CPU del Mac scala. I core efficiency limitano lo speedup massimo (ipotesi b), ma non spiegano un rallentamento.
+
+**Memoria.** Ogni worker di s3 occupa circa 660 MB, e durante la prima serie il Mac aveva altre applicazioni aperte e usava già 13,6 GB di swap su 14,3. Ho convertito i 240 PDF registrando con `vm_stat` quante pagine di memoria comprimeva macOS. Con le applicazioni aperte le compressioni passano da 2,3 milioni con 1 worker a 35 milioni con 10, e con 10 worker il tempo è peggiore che con 1 (speedup 0,89). Chiudendo le applicazioni le compressioni spariscono e lo speedup sale a 1,37, ma resta lontano da quello delle VM. La memoria era quindi una parte del problema, non tutto.
+
+**Thread interni.** pymupdf4llm 1.28 attiva da solo PyMuPDF Layout, che riconosce la struttura della pagina con modelli ONNX eseguiti da onnxruntime. Ogni sessione di onnxruntime usa di default più thread [18]. Sul Mac un worker occupava circa 3 core (85 s di CPU in 28 s di tempo reale), in gran parte in attesa attiva, mentre sulle VM Linux ne usava uno solo. Con 10 worker c'erano quindi circa 30 thread che si contendevano 10 core, cioè proprio l'ipotesi a.
+
+La correzione è in `rag/s3_pdf_to_md.py`. Prima di importare pymupdf4llm forzo un solo thread per ogni sessione di onnxruntime, così il parallelismo lo danno solo i worker (commit `59c93a9`).
+
+| Test sui 240 PDF con 10 worker | Tempo (s) | Speedup | Compressioni di memoria |
+|---|---|---|---|
+| applicazioni aperte | 220,8 | 0,89× | 35 milioni |
+| memoria libera | 132,3 | 1,37× | 0,1 milioni |
+| memoria libera e un thread per sessione | 57,7 | 3,40× | 0,1 milioni |
+
+#### 7.1.2 La serie ripetuta dopo la correzione
+
+Con la correzione e l'ambiente allineato (§4.4) ho ripetuto la serie sul campione, con il Mac libero da altre applicazioni (`local-cpu-ocr-1t`, 3 ripetizioni):
+
+| Worker *p* | Tempi (s) | Mediana (s) | Scarto | Doc/s | Speedup S(p) | E(p) |
+|---|---|---|---|---|---|---|
+| 1 | 1124 · 1121 · 1114 | 1121 | 0,9% | 0,87 | 1,00× | 1,00 |
+| 2 | 631 · 634 · 630 | 631 | 0,6% | 1,54 | 1,78× | 0,89 |
+| 4 | 394 · 395 · 395 | 395 | 0,3% | 2,46 | 2,84× | 0,71 |
+| 8 | 315 · 315 · 314 | 315 | 0,3% | 3,09 | 3,56× | 0,44 |
+| 10 | 308 · 307 · 308 | 308 | 0,3% | 3,16 | 3,64× | 0,36 |
+
+Osservazioni:
+- Ora lo speedup cresce fino a 10 worker, e con 10 worker il tempo è 3,7 volte più basso di quello della prima serie (308 s contro 1144 s).
+- Fino a 4 worker l'efficienza resta alta, poi cala. Oltre i 4 core performance i worker finiscono sui 6 core efficiency, più lenti, e da 8 a 10 worker si guadagna solo il 2%. Questa è la parte dell'ipotesi b che resta vera.
+- Con 10 worker il Mac converte il campione in 308 s, quanto la VM da 16 vCPU (318 s, §7.2).
+- Sulle VM la correzione non cambia i tempi (48 worker sulla VM GPU: 90 s prima e dopo), perché lì onnxruntime usava già un solo core.
+- Gli scarti sono tutti sotto l'1%, contro il 17–30% della prima serie, perché questa volta il Mac non era usato durante le misure.
+
+Configurazione locale migliore: 10 worker, 308 s.
 
 ### 7.2 s3: scaling sulle VM cloud
 
-Ho ripetuto la stessa misura di s3 sulle tre VM cloud, aumentando ogni volta il numero di worker fino al numero di vCPU disponibili. Le VM sono `cloud-cpu-s` con 8 vCPU Haswell, `cloud-cpu-l` con 16 vCPU Haswell, creata con l'IaC, e la VM `cloud-gpu` con 48 vCPU Sapphire Rapids. Quest'ultima l'ho usata anche per s3, lasciando ferma la GPU, perché è l'unica con più di 16 vCPU e permette di vedere cosa succede oltre quella soglia. Ogni misura è ripetuta 3 volte, tranne quella con un solo worker su `cloud-cpu-l` e sulla VM GPU, che è la più lunga ed è stata eseguita una volta sola.
+Sulle tre VM cloud ho misurato s3 aumentando ogni volta il numero di worker fino al numero di vCPU disponibili. Le VM sono `cloud-cpu-s` con 8 vCPU Haswell, `cloud-cpu-l` con 16 vCPU Haswell, creata con l'IaC, e la VM `cloud-gpu` con 48 vCPU Sapphire Rapids. Quest'ultima l'ho usata anche per s3, lasciando ferma la GPU, perché è l'unica con più di 16 vCPU e permette di vedere cosa succede oltre quella soglia.
 
-| VM | *p* | Tempi (s) | Mediana (s) | Scarto | Doc/s | Speedup S(p) | E(p) |
-|---|---|---|---|---|---|---|---|
-| 8 vCPU | 1 | 4368 · 4369 · 4388 | 4369 | 0,5% | 0,22 | 1,00× | 1,00 |
-| 8 vCPU | 2 | 2243 · 2242 · 2254 | 2243 | 0,5% | 0,43 | 1,95× | 0,97 |
-| 8 vCPU | 4 | 1154 · 1156 · 1154 | 1154 | 0,2% | 0,84 | 3,79× | 0,95 |
-| 8 vCPU | 8 | 595 · 597 · 595 | 595 | 0,3% | 1,63 | 7,34× | 0,92 |
-| 16 vCPU | 1 | 4387 | 4387 | — | 0,22 | 1,00× | 1,00 |
-| 16 vCPU | 4 | 1156 · 1154 · 1153 | 1154 | 0,3% | 0,84 | 3,80× | 0,95 |
-| 16 vCPU | 8 | 598 · 595 · 597 | 597 | 0,5% | 1,63 | 7,35× | 0,92 |
-| 16 vCPU | 16 | 319 · 319 · 318 | 319 | 0,3% | 3,05 | 13,75× | 0,86 |
-| 48 vCPU | 1 | 2478 | 2478 | — | 0,39 | 1,00× | 1,00 |
-| 48 vCPU | 8 | 339 · 338 · 337 | 338 | 0,6% | 2,88 | 7,33× | 0,92 |
-| 48 vCPU | 16 | 180 · 181 · 181 | 181 | 0,6% | 5,37 | 13,69× | 0,86 |
-| 48 vCPU | 32 | 108 · 111 · 109 | 109 | 2,8% | 8,92 | 22,73× | 0,71 |
-| 48 vCPU | 48 | 93 · 90 · 91 | 91 | 3,3% | 10,68 | 27,23× | 0,57 |
+La serie l'ho eseguita due volte. La prima tornata è quella dal 26 al 30/10, con le versioni di Python e PyTorch diverse da VM a VM. La seconda l'ho aggiunta il 31/10, dopo aver allineato gli ambienti (§4.4), su VM nuove create con lo stesso Makefile. In tabella della prima tornata riporto solo la mediana, mentre della seconda riporto i tre tempi, e da questi calcolo lo scarto, lo speedup e l'efficienza. L'ultima colonna dice di quanto la seconda tornata è più lenta (+) o più veloce (−) della prima. Ogni misura è ripetuta 3 volte, tranne quella con un solo worker su `cloud-cpu-l` e sulla VM GPU, che è la più lunga e l'ho eseguita una volta sola per tornata.
 
-![Scaling di s3: speedup per macchina](charts/s3_scaling.png)
+| VM | *p* | 1ª tornata, mediana (s) | 2ª tornata, tempi (s) | 2ª tornata, mediana (s) | Scarto | Speedup S(p) | E(p) | Differenza |
+|---|---|---|---|---|---|---|---|---|
+| 8 vCPU | 1 | 4369 | 4483 · 4484 · 4493 | 4484 | 0,2% | 1,00× | 1,00 | +2,6% |
+| 8 vCPU | 2 | 2243 | 2283 · 2276 · 2280 | 2280 | 0,3% | 1,97× | 0,98 | +1,6% |
+| 8 vCPU | 4 | 1154 | 1171 · 1171 · 1169 | 1171 | 0,2% | 3,83× | 0,96 | +1,5% |
+| 8 vCPU | 8 | 595 | 609 · 604 · 608 | 608 | 0,8% | 7,38× | 0,92 | +2,2% |
+| 16 vCPU | 1 | 4387 | 4533 | 4533 | — | 1,00× | 1,00 | +3,3% |
+| 16 vCPU | 4 | 1154 | 1175 · 1181 · 1179 | 1179 | 0,5% | 3,84× | 0,96 | +2,2% |
+| 16 vCPU | 8 | 597 | 612 · 611 · 612 | 612 | 0,2% | 7,41× | 0,93 | +2,5% |
+| 16 vCPU | 16 | 319 | 325 · 326 · 326 | 326 | 0,3% | 13,90× | 0,87 | +2,2% |
+| 48 vCPU | 1 | 2478 | 2511 | 2511 | — | 1,00× | 1,00 | +1,3% |
+| 48 vCPU | 8 | 338 | 326 · 327 · 331 | 327 | 1,5% | 7,68× | 0,96 | −3,3% |
+| 48 vCPU | 16 | 181 | 175 · 175 · 177 | 175 | 1,1% | 14,35× | 0,90 | −3,3% |
+| 48 vCPU | 32 | 109 | 108 · 108 · 108 | 108 | 0,0% | 23,25× | 0,73 | −0,9% |
+| 48 vCPU | 48 | 91 | 88 · 90 · 90 | 90 | 2,2% | 27,90× | 0,58 | −1,1% |
+
+![Scaling di s3 nella prima tornata](charts/s3_scaling.png)
+
+![Scaling di s3 nella seconda tornata](charts/s3_scaling_v2.png)
+
+Il primo grafico è della prima tornata, il secondo della seconda, dove in grigio resta per confronto la serie del Mac della prima tornata.
 
 Osservazioni:
-- Sul cloud lo scarto tra ripetizioni è sotto l'1% fino a 16 worker: le VM sono molto più stabili del Mac in uso.
-- **Riproducibilità tra VM.** `cloud-cpu-s` e `cloud-cpu-l` sono VM diverse, una creata a mano e una con Terraform a tre giorni di distanza, con la stessa CPU: con 1, 4 e 8 worker i tempi coincidono entro lo 0,4% (4369 contro 4387 s, 1154 contro 1154, 595 contro 597).
-- Lo scaling è quasi lineare fino a 16 worker, con la stessa efficienza (0,86) su `cloud-cpu-l` e sulla VM GPU. Con 32 e 48 l'efficienza cala; il calo è compatibile con Amdahl con una frazione seriale di circa l'1,6% (ricavata da S(48), prevede S(16) ≈ 12,9 e S(32) ≈ 21,3, contro 13,7 e 22,7 misurati). Contribuiscono anche lo sbilanciamento finale (972 documenti su 48 processi, ~20 a testa, con pochi documenti lunghi che allungano la coda) e il fatto che non si sa se le vCPU oltre una certa soglia siano core fisici o hyperthread (§9).
-- **Velocità per core** (1 worker, con OCR): M4 1215 s, Sapphire Rapids 2478 s, Haswell 4369 s. Un core Haswell è 3,6 volte più lento di un core M4, ma la VM da 8 vCPU con 8 worker (595 s) batte la configurazione migliore del Mac (879 s), che non riesce a usare i suoi core.
+- Tra le due tornate le VM Haswell sono più lente dell'1,5–3,3%, in modo uniforme su entrambe le VM e con ogni numero di worker, mentre sulla VM GPU le differenze vanno da −3,3% a +1,3%. Non riesco a separare l'effetto dell'ambiente allineato da quello di un nodo fisico diverso (§9), ma in ogni caso lo scaling non cambia e le conclusioni restano le stesse.
+- Le VM sono molto stabili. Nella seconda tornata lo scarto tra ripetizioni resta sotto l'1% sulle VM Haswell e arriva al massimo al 2,2% sulla VM GPU con 48 worker.
+- **Riproducibilità tra VM.** Le VM da 8 e da 16 vCPU hanno la stessa CPU, e con lo stesso numero di worker danno tempi quasi identici in entrambe le tornate. Nella prima la differenza era al massimo dello 0,4%, tra una VM creata a mano e una creata con Terraform a tre giorni di distanza. Nella seconda è al massimo dell'1,1%, con due VM create insieme.
+- Lo scaling è quasi lineare fino a 16 worker, con un'efficienza di 0,87 sulla VM da 16 vCPU e di 0,90 sulla VM GPU. Con 32 e 48 worker l'efficienza scende a 0,73 e 0,58. Con la legge di Amdahl, da S(48) si ricava una frazione seriale di circa l'1,6%, che prevede S(16) ≈ 13,0 e S(32) ≈ 21,5 contro i 14,3 e 23,3 misurati. Oltre alla parte seriale pesano lo sbilanciamento finale, perché con 48 processi ognuno converte circa 20 documenti e pochi documenti lunghi allungano la coda, e il dubbio che oltre una certa soglia le vCPU siano hyperthread invece di core fisici (§9).
+- **Velocità per core.** Con un solo worker, nella seconda tornata, un core M4 converte il campione in 1121 s (§7.1.2), un core Sapphire Rapids in 2511 s e un core Haswell in 4484 s, cioè 4 volte più lentamente del M4. Nella prima tornata la VM da 8 vCPU con 8 worker batteva il Mac, che non riusciva a usare i suoi core. Dopo la correzione di s3 il Mac con 10 worker (308 s) è invece 2 volte più veloce della VM da 8 vCPU (608 s) e veloce quanto quella da 16 (326 s).
 
 ### 7.3 s4: embedding per device
 
-La fase s4 trasforma i frammenti in vettori con il modello bge-m3 e li salva in ChromaDB. È la fase che si avvantaggia di più di una GPU, perché il modello esegue soprattutto moltiplicazioni di matrici. Ho misurato s4 su tutti i dispositivi a disposizione, cioè la CPU e la GPU integrata del Mac, le due VM solo CPU e la H100. Sui dispositivi più lenti una misura dura da 2,4 a quasi 7 ore, quindi l'ho eseguita una volta sola, mentre sulla H100 l'ho ripetuta 3 volte. La velocità è espressa in chunk al secondo, e la colonna "Rispetto alla CPU del Mac" dice quante volte ogni dispositivo è più veloce della CPU del Mac, per cui un valore sotto 1 vuol dire più lento. Il numero di chunk sul Mac è un po' diverso perché lì s4 usa i Markdown convertiti senza OCR (§9).
+La fase s4 trasforma i frammenti in vettori con il modello bge-m3 e li salva in ChromaDB. È la fase che si avvantaggia di più di una GPU, perché il modello esegue soprattutto moltiplicazioni di matrici. Ho misurato s4 su tutti i dispositivi a disposizione, cioè la CPU e la GPU integrata del Mac, le due VM solo CPU e la H100. Sui dispositivi più lenti una misura dura da 2,3 a quasi 7 ore, quindi l'ho eseguita una volta sola per tornata, mentre sulla H100 l'ho ripetuta 3 volte. Tutte le misure usano batch 64. Come per s3 riporto le due tornate nella stessa tabella. La velocità in chunk al secondo e il confronto con la CPU del Mac li calcolo sulla seconda tornata, e la colonna "Rispetto alla CPU del Mac" dice quante volte ogni dispositivo è più veloce della CPU del Mac, per cui un valore sotto 1 vuol dire più lento. Nella prima tornata il Mac aveva 31.905 chunk perché usava i Markdown convertiti senza OCR (§9), mentre nella seconda tutte le macchine indicizzano gli stessi 31.365 chunk. Sul corpus completo la seconda tornata è l'indicizzazione di `split-gpu` (§7.6.3).
 
-| Config | Device | Chunk | Batch | Tempo (s) | Chunk/s | Rispetto alla CPU del Mac | Ripetizioni |
+| Config | Device | Chunk (2ª tornata) | 1ª tornata (s) | 2ª tornata (s) | Differenza | Chunk/s | Rispetto alla CPU del Mac |
 |---|---|---|---|---|---|---|---|
-| `local-cpu` | CPU M4, 10 core | 31.905 | 64 | 8.536 | 3,74 | 1,00× | 1 |
-| `local-mps` | GPU M4 (MPS) | 31.905 | 64 | 24.455 | 1,30 | 0,35× | 1 |
-| `cloud-cpu-s` | 8 vCPU Haswell | 31.365 | 64 | 24.666 | 1,27 | 0,34× | 1 |
-| `cloud-cpu-l` | 16 vCPU Haswell | 31.365 | 64 | 14.338 | 2,19 | 0,59× | 1 |
-| `cloud-gpu` | H100 | 31.365 | 64 | 281 (281 · 282 · 281) | 111,6 | **29,9×** | 3 |
-| `cloud-gpu-full` | H100 | 807.495 | 64 | 9.833 | 82,1 | 22,0× | 1 |
+| `local-cpu` | CPU M4, 10 core | 31.365 | 8.536 | 8.130 | −4,8% | 3,86 | 1,00× |
+| `local-mps` | GPU M4 (MPS) | 31.365 | 24.455 | 10.716 | −56% | 2,93 | 0,76× |
+| `cloud-cpu-s` | 8 vCPU Haswell | 31.365 | 24.666 | 23.819 | −3,4% | 1,32 | 0,34× |
+| `cloud-cpu-l` | 16 vCPU Haswell | 31.365 | 14.338 | 14.758 | +2,9% | 2,13 | 0,55× |
+| `cloud-gpu` | H100 | 31.365 | 281 (281 · 282 · 281) | 277 (275 · 277 · 279) | −1,4% | 113,2 | **29,3×** |
+| `cloud-gpu-full` / `split-gpu` | H100 | 807.916 | 9.833 | 9.756 | −0,8% | 82,8 | 21,5× |
 
 Il tempo comprende caricamento del modello, chunking e scrittura in Chroma.
 
 Osservazioni:
-- La H100 è ~30 volte più veloce della CPU del Mac e 51–88 volte più veloce delle VM da 16 e 8 vCPU.
-- Raddoppiando le vCPU s4 accelera di 1,72 volte (efficienza 0,86, con l'avvertenza della versione di PyTorch diversa, §9), ma anche la VM da 16 vCPU resta 1,7 volte più lenta dei 10 core del Mac: su CPU l'embedding non è un'opzione per il corpus completo.
-- Sul Mac la GPU integrata è **2,9 volte più lenta** della CPU con bge-m3 (già emerso nella baseline su un singolo batch); per s4 in locale si usa la CPU.
+- La H100 è circa 29 volte più veloce della CPU del Mac e da 53 a 86 volte più veloce delle VM da 16 e 8 vCPU, con valori quasi uguali nelle due tornate.
+- Con la stessa versione di PyTorch su tutte e due le VM, raddoppiare le vCPU accelera s4 di 1,61 volte (efficienza 0,81). Nella prima tornata risultava 1,72, ma la VM da 16 vCPU aveva una versione di PyTorch più recente (§9). Anche così la VM da 16 vCPU resta 1,8 volte più lenta dei 10 core del Mac, quindi su CPU l'embedding del corpus completo non è un'opzione.
+- La differenza più grande tra le tornate è la GPU del Mac, che nella seconda impiega meno della metà del tempo. Nella prima tornata il Mac era usato anche per altro e la memoria era spesso al limite (§7.1.1), e nel frattempo è cambiata anche la versione di PyTorch, quindi non so dire quanto pesi ciascuna delle due cose. Anche così la GPU del Mac resta 1,3 volte più lenta della CPU, quindi per s4 in locale si usa ancora la CPU.
+- Sulle altre macchine le differenze tra le tornate restano entro il 5%, e sulla H100 entro l'1,4%.
 
-Sulla H100 ho provato anche diverse dimensioni del *batch*, cioè quanti frammenti il modello elabora insieme in un solo passaggio sulla GPU. Di solito un batch più grande sfrutta meglio la GPU, quindi mi aspettavo i tempi più bassi con 256. Le misure con batch 64 e 256 sono ripetute 3 volte, quelle con 32 e 128 una volta sola.
+![Tempi di s3 e s4 sul campione nelle due tornate](charts/rounds_times.png)
+
+Il grafico mette a confronto le due tornate. A sinistra c'è s3 con tutti i core di ogni macchina, dove l'unica differenza grande è il Mac dopo la correzione di s3 (§7.1.1). A destra c'è s4, in scala logaritmica perché i tempi vanno da pochi minuti a quasi 7 ore, dove cambia solo la GPU del Mac.
+
+Sulla H100 ho provato anche diverse dimensioni del *batch*, cioè quanti frammenti il modello elabora insieme in un solo passaggio sulla GPU. Di solito un batch più grande sfrutta meglio la GPU, quindi mi aspettavo i tempi più bassi con 256. Le misure con batch 64 e 256 sono ripetute 3 volte, quelle con 32 e 128 una volta sola, in entrambe le tornate.
 
 | Batch | 32 | 64 | 128 | 256 |
 |---|---|---|---|---|
-| s4 (s) | 262 | 281 | 315 | 410 |
-| più veloce del batch 256 (v0) | 1,56× | 1,46× | 1,30× | 1,00× |
+| s4 (s), 1ª tornata | 262 | 281 | 315 | 410 |
+| s4 (s), 2ª tornata | 259 | 277 | 311 | 405 |
+| più veloce del batch 256 (v0), 2ª tornata | 1,56× | 1,46× | 1,30× | 1,00× |
 
-![s4 sulla H100: tempo per dimensione del batch](charts/s4_batch.png)
+![s4 sulla H100: tempo per dimensione del batch, seconda tornata](charts/s4_batch_v2.png)
+
+Il grafico è della seconda tornata; quello della prima, quasi identico, è in [charts/s4_batch.png](charts/s4_batch.png).
 
 Il risultato è l'opposto, cioè il tempo cresce con il batch. `s4_index.py` passa al modello blocchi di 256 testi, il modello li ordina per lunghezza e li divide in sotto-batch della dimensione richiesta, ciascuno completato con *padding* fino al testo più lungo. Sotto-batch piccoli contengono testi di lunghezza simile e quindi meno padding. Sul corpus completo il vantaggio si riduce molto (§7.5): la scelta del batch fatta sul campione va verificata sul carico reale.
 
@@ -519,14 +604,16 @@ Nella configurazione monolitica la H100 lavora solo durante s4: download e conve
 
 ### 7.5 Campione e corpus completo
 
-Il full run permette di verificare l'estrapolazione lineare dal campione:
+Il full run permette di verificare l'estrapolazione lineare dal campione. Le prime due righe sono della prima tornata, sulla VM GPU. Le altre due sono della seconda, con la configurazione eterogenea eseguita (§7.6.3), quindi con s3 sulla VM da 16 vCPU.
 
 | Fase | Previsto dal campione | Misurato | Errore |
 |---|---|---|---|
-| s3 | 91 s × 17.984 / 972 = 1.684 s | 2.109 s | +25% |
-| s4 | 281 s × 807.495 / 31.365 = 7.234 s | 9.833 s | +36% |
+| s3, VM GPU (48 worker) | 91 s × 17.984 / 972 = 1.684 s | 2.109 s | +25% |
+| s4, H100 | 281 s × 807.495 / 31.365 = 7.234 s | 9.833 s | +36% |
+| s3, VM da 16 vCPU (16 worker), seconda tornata | 326 s × 18.001 / 972 = 6.037 s | 9.426 s | +56% |
+| s4, H100, seconda tornata | 277 s × 807.916 / 31.365 = 7.135 s | 9.756 s | +37% |
 
-La causa non è nella macchina ma nei dati. Per capirlo ho confrontato i chunk dell'indice della baseline v0, che usa la stessa suddivisione in frammenti, separando quelli dei 500 farmaci del campione da quelli del resto del corpus.
+Per s4 l'errore è lo stesso nelle due tornate. Per s3 invece sulla VM Haswell è più del doppio, quindi l'errore dipende anche dalla macchina e dal numero di worker (§7.6.3). La parte dell'errore comune alle due macchine invece dipende dai dati. Per capirlo ho confrontato i chunk dell'indice della baseline v0, che usa la stessa suddivisione in frammenti, separando quelli dei 500 farmaci del campione da quelli del resto del corpus.
 
 | | Chunk | Lunghezza media | Chunk ≥ 1.400 caratteri | Chunk per documento |
 |---|---|---|---|---|
@@ -541,68 +628,160 @@ Da questo ho tratto una conseguenza per il metodo. Le **proporzioni** tra le con
 
 ### 7.6 Tempo e costo
 
-In questa sezione metto insieme i tempi misurati e i prezzi di §6 per stimare quanto costerebbe ogni configurazione su un cloud commerciale. Considero solo s3 e s4, cioè conversione e indicizzazione, perché s1 dura pochi secondi, s2 dipende dalla rete e dai server AIFA più che dalla macchina, e s5 non l'ho misurata sul cloud.
+In questa sezione metto insieme i tempi misurati e i prezzi di §6 per stimare quanto costerebbe ogni configurazione su un cloud commerciale. Considero solo s3 e s4, cioè conversione e indicizzazione, perché s1 dura pochi secondi, s2 dipende dalla rete e dai server AIFA più che dalla macchina, e s5 la tratto a parte (§7.8).
 
 Per ogni configurazione prendo la mediana delle ripetizioni dei run completi s3 + s4 e ci aggiungo l'overhead di creazione e preparazione della VM, ottenendo le ore pagate. Moltiplicando le ore per il prezzo orario di ogni fornitore ottengo il costo, di cui in tabella riporto il fornitore più economico e quello più caro. Il costo per 1.000 documenti serve a confrontare il campione con il corpus completo. Tutti i calcoli sono fatti da `bench/cost_model.py`, che salva i risultati in `results/costs.csv` e `results/costs_split.csv`.
 
-Prima presento le configurazioni che ho effettivamente misurato, poi quella eterogenea, che ho calcolato combinando i tempi delle singole fasi.
+Come per i tempi, riporto le due tornate nella stessa tabella, ognuna con i suoi tempi e il suo overhead (§6), mentre le osservazioni si basano sulla seconda. Prima presento le configurazioni con una sola macchina, poi quella eterogenea, che nella prima tornata avevo calcolato combinando i tempi delle singole fasi e nella seconda ho eseguito sul corpus completo.
 
 #### 7.6.1 Configurazioni misurate
 
-| Configurazione | Ore pagate | Costo | € per 1.000 documenti |
-|---|---|---|---|
-| `local-cpu`, campione (s3 + s4 su CPU) | 2,67 | 0,14 € | 0,14 |
-| `local-mps`, campione (s3 + s4 su MPS) | 7,08 | 0,37 € | 0,38 |
-| `cloud-cpu-s`, campione | 7,10 | 2,96 € (Azure) – 3,67 € (GCP) | 3,04 – 3,77 |
-| `cloud-cpu-l`, campione | 4,15 | 3,46 € (Azure) – 4,21 € (GCP) | 3,56 – 4,33 |
-| `cloud-gpu`, campione, batch 64 | 0,18 | 0,64 € (RunPod) – 1,79 € (Azure) | 0,66 – 1,84 |
-| `cloud-gpu-full`, corpus completo | 3,40 | 11,77 € (RunPod) – 33,10 € (Azure) | 0,65 – 1,84 |
+| Configurazione | Ore pagate, 1ª | Costo, 1ª | Ore pagate, 2ª | Costo, 2ª | € per 1.000 documenti, 2ª |
+|---|---|---|---|---|---|
+| `local-cpu`, campione (s3 + s4 su CPU) | 2,67 | 0,14 € | 2,34 | 0,12 € | 0,13 |
+| `local-mps`, campione (s3 + s4 su MPS) | 7,08 | 0,37 € | 3,06 | 0,16 € | 0,16 |
+| `cloud-cpu-s`, campione | 7,10 | 2,96 € (Azure) – 3,67 € (GCP) | 6,84 | 2,85 € (Azure) – 3,53 € (GCP) | 2,93 – 3,63 |
+| `cloud-cpu-l`, campione | 4,15 | 3,46 € (Azure) – 4,21 € (GCP) | 4,24 | 3,53 € (Azure) – 4,30 € (GCP) | 3,64 – 4,42 |
+| `cloud-gpu`, campione, batch 64 | 0,18 | 0,64 € (RunPod) – 1,79 € (Azure) | 0,16 | 0,56 € (RunPod) – 1,56 € (Azure) | 0,57 – 1,61 |
+| `cloud-gpu-full`, corpus completo | 3,40 | 11,77 € (RunPod) – 33,10 € (Azure) | 3,38 | 11,69 € (RunPod) – 32,89 € (Azure) | 0,65 – 1,83 |
+
+Il full run monolitico sul corpus completo l'ho eseguito solo nella prima tornata. Nella seconda uso gli stessi tempi con l'overhead nuovo, perché rifacendo s4 sul corpus completo il tempo è cambiato solo dello 0,8% (§7.6.3).
 
 Osservazioni:
-- La VM con GPU costa **meno** della VM solo CPU, anche se all'ora costa molto di più. Sulla CPU s4 dura ore, e il prezzo orario più basso non basta a compensarle.
-- Su tutta la pipeline `cloud-cpu-l` costa il 17% in più di `cloud-cpu-s`. All'ora costa il doppio, ma s4, che occupa quasi tutto il tempo, va solo 1,72 volte più veloce. La VM più grande conviene quindi solo per le fasi che scalano quasi linearmente come s3, ed è proprio quello che sfrutta la configurazione eterogenea (§7.6.2).
-- L'overhead fisso pesa molto sui lavori brevi e poco su quelli lunghi. Con la H100 su Azure aumenta del 78% il costo di un run sul campione (1,79 € invece di 1,01 €) e solo del 2,4% quello sul corpus completo (33,10 € invece di 32,32 €).
-- Il campione sottostima anche i costi, perché i documenti reali sono più lunghi (§7.5). Senza contare l'overhead, su Azure 1.000 documenti costano 1,04 € sul campione e 1,80 € sul corpus completo.
-- In locale il costo in euro è il più basso, ma si paga in tempo. Già il campione richiede ore, e il corpus completo richiederebbe giorni di calcolo continuo (§7.7).
+- Anche nella seconda tornata la VM con la H100 costa meno delle VM solo CPU, nonostante il prezzo orario molto più alto. Sulla CPU s4 dura ore, e il prezzo orario più basso non basta a compensarle.
+- Su tutta la pipeline la VM da 16 vCPU costa ora il 24% in più di quella da 8, contro il 17% della prima tornata. Il prezzo orario è doppio, mentre con la stessa versione di PyTorch s4 accelera solo di 1,61 volte (§7.3). Una VM più grande conviene quindi solo per le fasi che scalano quasi linearmente come s3, ed è proprio quello che sfrutta la configurazione eterogenea (§7.6.2).
+- Con la configurazione più veloce l'overhead pesa meno, ma resta molto più importante sui lavori brevi. Con la H100 su Azure aumenta del 57% il costo di un run sul campione (1,56 € invece di 0,99 €), contro il 78% della prima tornata, e solo dell'1,8% quello sul corpus completo (32,89 € invece di 32,32 €).
+- Il campione sottostima anche i costi, perché i documenti reali sono più lunghi (§7.5). Senza contare l'overhead, su Azure 1.000 documenti costano 1,02 € sul campione e 1,80 € sul corpus completo.
+- Il Mac con la GPU ora costa meno della metà (0,16 € invece di 0,37 €), perché s4 su MPS è diventata più veloce (§7.3), e con la CPU il campione costa 0,12 € in 2,3 ore. In euro il locale resta il più economico, ma si paga in tempo, e il corpus completo richiederebbe giorni di calcolo continuo (§7.7).
 
 #### 7.6.2 Configurazione eterogenea
 
-La configurazione eterogenea non l'ho eseguita davvero, ma l'ho ricostruita a partire dai tempi delle singole fasi. Immagino due VM usate una dopo l'altra. La prima è una VM solo CPU che esegue s3 con il numero di worker che la rende più veloce, la seconda è la VM con la H100 che esegue s4 con batch 64. Ognuna paga il proprio overhead di creazione e preparazione. Ho considerato solo Azure e AWS, perché tra i fornitori scelti sono gli unici che offrono sia VM solo CPU sia VM con una H100.
+La configurazione eterogenea usa due VM una dopo l'altra. La prima è una VM solo CPU che esegue s3 con il numero di worker che la rende più veloce, la seconda è la VM con la H100 che esegue s4 con batch 64. Ognuna paga il proprio overhead di creazione e preparazione. Ho considerato solo Azure e AWS, perché tra i fornitori scelti sono gli unici che offrono sia VM solo CPU sia VM con una H100.
 
-Sul corpus completo non ho misurato s3 sulla VM CPU, quindi l'ho stimato partendo dal tempo sul campione e moltiplicandolo per il rapporto tra corpus e campione misurato sulla VM GPU, cioè 2.109 / 91 = 23,2.
+Nella prima tornata non l'avevo eseguita, ma l'avevo ricostruita a partire dai tempi delle singole fasi. Sul corpus completo non avevo misurato s3 sulla VM CPU, quindi l'avevo stimato moltiplicando il tempo sul campione per il rapporto tra corpus e campione misurato sulla VM GPU, cioè 2.109 / 91 = 23,2. Nella seconda tornata l'ho eseguita sul corpus completo con la VM da 16 vCPU (§7.6.3), e il costo di quelle righe viene dai tempi misurati, compreso il trasferimento dei Markdown tra le due VM. Le altre righe della seconda tornata sono ancora ricostruite. Per il campione uso i tempi delle singole fasi, mentre per la VM da 8 vCPU sul corpus completo stimo s3 con il rapporto tra corpus e campione misurato sulla stessa CPU Haswell, cioè 9.426 / 326 = 28,9.
 
-| Corpus | Configurazione | Ore | Azure | AWS |
-|---|---|---|---|---|
-| campione | monolitica (VM GPU) | 0,18 | 1,79 € | 1,47 € |
-| campione | split `cloud-cpu-s` (8 worker) + GPU | 0,41 | 1,65 € | 1,38 € |
-| campione | split `cloud-cpu-l` (16 worker) + GPU | 0,33 | 1,69 € | 1,42 € |
-| completo | monolitica (VM GPU) | 3,40 | 33,10 € | 27,16 € |
-| completo | split `cloud-cpu-s` + GPU | 6,72 | 29,02 € | 24,21 € |
-| completo | split `cloud-cpu-l` + GPU | 4,95 | 29,17 € | 24,37 € |
-| completo, con s2 | monolitica (VM GPU) | 6,06 | 59,05 € | 48,46 € |
-| completo, con s2 | split: s2 e s3 su `cloud-cpu-l`, s4 su GPU | 7,61 | 31,39 € | 26,73 € |
+| Corpus | Configurazione | Ore, 1ª | Azure, 1ª | AWS, 1ª | Ore, 2ª | Azure, 2ª | AWS, 2ª |
+|---|---|---|---|---|---|---|---|
+| campione | monolitica (VM GPU) | 0,18 | 1,79 € | 1,47 € | 0,16 | 1,56 € | 1,28 € |
+| campione | split `cloud-cpu-s` (8 worker) + GPU | 0,41 | 1,65 € | 1,38 € | 0,36 | 1,41 € | 1,18 € |
+| campione | split `cloud-cpu-l` (16 worker) + GPU | 0,33 | 1,69 € | 1,42 € | 0,28 | 1,44 € | 1,21 € |
+| completo | monolitica (VM GPU) | 3,40 | 33,10 € | 27,16 € | 3,38 | 32,89 € | 26,99 € |
+| completo | split `cloud-cpu-s` + GPU | 6,72 | 29,02 € | 24,21 € | 7,76 | 29,30 € | 24,55 € |
+| completo | split `cloud-cpu-l` + GPU, eseguita nella 2ª | 4,95 | 29,17 € | 24,37 € | 5,49 | 29,48 € | 24,74 € |
+| completo, con s2 | monolitica (VM GPU) | 6,06 | 59,05 € | 48,46 € | 6,04 | 58,84 € | 48,29 € |
+| completo, con s2 | split: s2 e s3 su `cloud-cpu-l`, s4 su GPU, eseguita nella 2ª | 7,61 | 31,39 € | 26,73 € | 7,99 | 31,56 € | 26,94 € |
 
-![Costo e tempo di s3 + s4 per configurazione e fornitore](charts/costs.png)
+![Costo e tempo di s3 + s4 per configurazione e fornitore, seconda tornata](charts/costs_v2.png)
+
+![Costo del corpus completo nelle due tornate](charts/rounds_costs.png)
 
 Osservazioni:
-- Sul corpus completo, contando solo s3 e s4, la configurazione eterogenea (*split* nella tabella) costa il **10–12% in meno** della monolitica, ma impiega il 46% di tempo in più (4,95 h invece di 3,40 h con `cloud-cpu-l`). Le 16 vCPU Haswell impiegano circa 2 ore per convertire quello che le 48 vCPU della VM GPU convertono in 35 minuti. Il risparmio resta piccolo perché la parte più cara è s4, che in entrambi i casi gira sulla GPU.
-- Le due VM CPU portano quasi allo stesso costo. `cloud-cpu-l` costa il doppio all'ora, ma grazie allo scaling quasi lineare di s3 (§7.2) dimezza il tempo. A parità di spesa conviene quindi la più grande, che finisce prima.
-- Il guadagno vero arriva togliendo il **download dalla GPU**. s2 occupa 2 h 40 min in cui né la GPU né la CPU lavorano (§7.4). Se anche s2 si sposta sulla VM CPU, il costo del corpus completo su Azure scende da 59,05 € a 31,39 € (−47%, e −45% su AWS), con 1,5 h in più. Queste righe le ho calcolate a mano, perché s2 è misurato solo nel full run (`results/cloud-gpu-full/full_s1s2.csv`) e non compare in `all.csv`.
-- Sul campione l'overhead pagato due volte riduce il vantaggio al 4–8%, quindi per i lavori brevi separare le fasi conviene poco.
-- **Nel grafico** le configurazioni sono ordinate per costo. Sul campione la più economica è il Mac (0,14 €, ma 2,7 h) e la più veloce è la H100 (0,18 h, da 0,64 € con RunPod). Nessun'altra configurazione è più economica *e* più veloce di queste due, che per questo formano la *frontiera di Pareto*. Sul corpus completo invece la H100 di RunPod è sia la più veloce sia la più economica, con 11,77 € contro i 24–29 € della configurazione eterogenea su Azure e AWS. Questo mostra che la scelta del fornitore pesa più dell'architettura. La configurazione eterogenea conviene solo a parità di fornitore, e solo Azure e AWS offrono entrambi i tipi di VM.
+- Sul corpus completo, contando solo s3 e s4, la configurazione eterogenea (*split* nella tabella) eseguita davvero costa il **10% in meno** della monolitica su Azure e l'8% in meno su AWS, ma impiega il 63% di tempo in più (5,49 h invece di 3,38 h). La stima della prima tornata prometteva un risparmio del 10–12% con il 46% di tempo in più. La differenza viene quasi tutta da s3, che sulla VM CPU è durata il 27% in più del previsto (§7.6.3). Il risparmio resta piccolo perché la parte più cara è s4, che in entrambi i casi gira sulla GPU.
+- Le due VM CPU portano quasi allo stesso costo (29,30 € contro 29,48 € su Azure), ma quella da 16 vCPU finisce 2,3 ore prima, grazie allo scaling quasi lineare di s3 (§7.2). A parità di spesa conviene quindi la più grande.
+- Il guadagno vero arriva togliendo il **download dalla GPU**. s2 occupa 2 h 40 min in cui né la GPU né la CPU lavorano (§7.4). Nella seconda tornata il download l'ho eseguito davvero sulla VM CPU, e il costo del corpus completo su Azure scende da 58,84 € a 31,56 € (−46%, e −44% su AWS), con circa 2 ore in più. Nella prima tornata queste righe le avevo calcolate a mano, ora le calcola `cost_model.py` con i tempi di s1 e s2 salvati in `full_s1s2.csv` dal full run e da `split-cpu`.
+- Sul campione l'overhead pagato due volte riduce il vantaggio al 6–10%, quindi per i lavori brevi separare le fasi conviene poco.
+- **Nel primo grafico** (seconda tornata) le configurazioni sono ordinate per costo. Sul campione la più economica è il Mac (0,12 €, ma 2,3 h) e la più veloce è la H100 (0,16 h, da 0,56 € con RunPod). Nessun'altra configurazione è più economica *e* più veloce di queste due, che per questo formano la *frontiera di Pareto*. Sul corpus completo invece la H100 di RunPod è sia la più veloce sia la più economica, con 11,69 € contro i 24,55–29,48 € della configurazione eterogenea su Azure e AWS. Questo mostra che la scelta del fornitore pesa più dell'architettura. La configurazione eterogenea conviene solo a parità di fornitore, e solo Azure e AWS offrono entrambi i tipi di VM. Lo stesso grafico per la prima tornata è in [charts/costs.png](charts/costs.png).
+- **Il secondo grafico** confronta le due tornate sul corpus completo. La monolitica costa quasi uguale, mentre la split eseguita costa un po' più della stima, perché s3 sulla VM CPU è durata di più.
+
+#### 7.6.3 La configurazione eterogenea eseguita
+
+Nella seconda tornata ho eseguito davvero la configurazione eterogenea sul corpus completo, con due VM una dopo l'altra. Sulla VM da 16 vCPU (`split-cpu`) ho eseguito la creazione del database, il download e la conversione con 16 worker. Poi ho scaricato i Markdown e il database sul Mac con `make fetch-md` e li ho inviati alla VM con la H100 (`split-gpu`) con `make push-md` (§5.4), e lì ho eseguito s4 con batch 64. Il passaggio dal Mac non è obbligatorio, ma mi ha permesso di usare lo stesso Makefile senza dare a una VM l'accesso all'altra.
+
+| Passo | Dove | Durata |
+|---|---|---|
+| s1 | VM da 16 vCPU | 6 s |
+| s2, 25.198 PDF richiesti | VM da 16 vCPU | 8.973 s (2 h 30 min) |
+| s3, 18.001 documenti con 16 worker | VM da 16 vCPU | 9.426 s (2 h 37 min) |
+| Markdown e database dalla VM CPU al Mac (1,2 GB) | rete | 104 s |
+| Markdown e database dal Mac alla VM GPU | rete | 97 s |
+| s4, 807.916 chunk con batch 64 | H100 | 9.756 s (2 h 43 min) |
+
+Osservazioni:
+- s4 sulla H100 ha richiesto 9.756 s, contro i 9.833 s del full run della prima tornata (−0,8%) con quasi lo stesso numero di chunk. L'embedding del corpus completo è quindi riproducibile anche a tre giorni di distanza e con l'ambiente cambiato.
+- s3 sulla VM CPU è durata il 27% in più dei ~7.400 s che avevo stimato in §7.6.2 con il rapporto tra corpus e campione della VM GPU (23,2). Sulla VM da 16 vCPU il rapporto misurato è 9.426 / 326 = 28,9. Una possibile spiegazione è che sulla VM GPU il run del campione con 48 worker sia allungato dalla coda finale sbilanciata (§7.2), che sul corpus completo pesa molto meno e quindi abbassa il rapporto. Non l'ho verificato, ma vuol dire che anche il rapporto tra corpus e campione dipende dalla macchina e dal numero di worker.
+- Il trasferimento dei Markdown tra le due VM, che nel calcolo della prima tornata avevo ignorato, richiede in tutto circa 3 minuti e mezzo passando dal Mac, cioè l'1% del tempo di s3 + s4.
+- Senza contare l'overhead, s3, trasferimento e s4 richiedono 19.383 s (5 h 23 min), contro gli 11.865 s della monolitica (2.109 s di s3 nel full run più 9.756 s di s4). Il tempo cresce quindi del 63%, mentre con la stima della prima tornata cresceva del 44%.
+- Il download sulla VM CPU è durato il 6% in meno che sulla VM GPU nel full run (9.587 s), a conferma che dipende dalla rete e dai server AIFA più che dalla macchina.
 
 ### 7.7 Locale o cloud: punto di pareggio
 
-In questa sezione rispondo alla domanda 4 di §1, cioè da quale dimensione del corpus conviene il cloud rispetto al Mac. Per ogni configurazione il tempo e il costo crescono in modo lineare con il numero di documenti *n*. C'è una parte fissa, che esiste solo sul cloud ed è l'overhead di creazione e preparazione della VM, più una parte che cresce con ogni documento, ricavata dai run completi s3 + s4 sul campione.
+In questa sezione rispondo alla domanda 4 di §1, cioè da quale dimensione del corpus conviene il cloud rispetto al Mac. Per ogni configurazione il tempo e il costo crescono in modo lineare con il numero di documenti *n*. C'è una parte fissa, che esiste solo sul cloud ed è l'overhead di creazione e preparazione della VM, più una parte che cresce con ogni documento, ricavata dai run completi s3 + s4 sul campione. In tabella ci sono entrambe le tornate, mentre i calcoli qui sotto usano la seconda.
 
 | | Parte fissa | Tempo per documento | Costo per 1.000 documenti |
 |---|---|---|---|
-| Mac, CPU | — | 9,89 s | 0,14 € |
-| VM H100, batch 64 | 290 s; 0,28 € (RunPod) – 0,79 € (Azure) | 0,38 s | 0,37 € (RunPod) – 1,04 € (Azure) |
+| Mac, CPU, 1ª tornata | — | 9,89 s | 0,14 € |
+| Mac, CPU, 2ª tornata | — | 8,68 s | 0,13 € |
+| VM H100, batch 64, 1ª tornata | 290 s; 0,28 € (RunPod) – 0,79 € (Azure) | 0,38 s | 0,37 € (RunPod) – 1,04 € (Azure) |
+| VM H100, batch 64, 2ª tornata | 211 s; 0,20 € (RunPod) – 0,57 € (Azure) | 0,38 s | 0,36 € (RunPod) – 1,02 € (Azure) |
 
-- **Tempo.** Il Mac impiega 9,89 secondi per documento, la H100 290 secondi fissi più 0,38 secondi per documento. I due tempi si eguagliano quando 9,89 *n* = 290 + 0,38 *n*, cioè con *n* ≈ 30. Sopra circa 30 documenti la H100 finisce quindi prima del Mac, anche contando l'overhead. Sul campione di 972 documenti impiega 0,18 h invece di 2,7 h.
-- **Costo.** In euro il punto di pareggio non esiste. Anche senza contare la parte fissa, ogni documento sulla H100 costa da 2,6 (RunPod) a 7,2 volte (Azure) più che sul Mac, quindi il locale costa meno a ogni dimensione del corpus e non solo sotto una certa soglia. Questo risultato dipende però dall'ammortamento su 24 ore al giorno (§6), che è il caso più favorevole al locale. Se il Mac lavora meno ore, ogni ora deve ripagare una quota più grande del suo prezzo. Il Mac resta più economico della H100 di RunPod finché lavora in media almeno ~5,4 ore al giorno per i 4 anni di ammortamento. Sotto questa soglia l'ammortamento supera 0,106 €/h e la H100 di RunPod diventa più economica.
-- **Corpus completo sul Mac (stima).** Non ho eseguito il corpus completo sul Mac, ma posso stimarne la durata scalando i tempi di s3 e s4 del campione con i rapporti tra corpus e campione misurati sulla H100 (23,2 per s3 e 35,0 per s4, §7.5). Il risultato è di circa 90 ore, cioè **~3,7 giorni** di calcolo continuo, per circa 4,70 €. Sulla H100 servono invece 3,4 ore e da 11,77 a 33,10 €. Il cloud quindi non fa risparmiare denaro ma tempo, circa 86 ore in cambio di 7–28 € in più, cioè da 0,08 a 0,33 € per ogni ora risparmiata.
+- **Tempo.** Il Mac impiega 8,68 secondi per documento, la H100 211 secondi fissi più 0,38 secondi per documento. I due tempi si eguagliano quando 8,68 *n* = 211 + 0,38 *n*, cioè con *n* ≈ 25. Sopra circa 25 documenti la H100 finisce quindi prima del Mac, anche contando l'overhead. Sul campione di 972 documenti impiega 0,16 h invece di 2,3 h. Nella prima tornata la soglia era di circa 30 documenti. Il Mac è diventato più veloce, ma l'overhead più corto ha spostato la soglia ancora più in basso.
+- **Costo.** In euro il punto di pareggio non esiste. Anche senza contare la parte fissa, ogni documento sulla H100 costa da 2,9 (RunPod) a 8,1 volte (Azure) più che sul Mac, quindi il locale costa meno a ogni dimensione del corpus e non solo sotto una certa soglia. Questo risultato dipende però dall'ammortamento su 24 ore al giorno (§6), che è il caso più favorevole al locale. Se il Mac lavora meno ore, ogni ora deve ripagare una quota più grande del suo prezzo. Il Mac resta più economico della H100 di RunPod finché lavora in media almeno ~4,7 ore al giorno per i 4 anni di ammortamento, contro le ~5,4 della prima tornata. Sotto questa soglia l'ammortamento supera 0,122 €/h e la H100 di RunPod diventa più economica.
+- **Corpus completo sul Mac (stima).** Non ho eseguito il corpus completo sul Mac, ma posso stimarne la durata scalando i tempi di s3 e s4 del campione con i rapporti tra corpus e campione misurati nella seconda tornata. Per s3 uso quello della VM da 16 vCPU (28,9), che ha un numero di worker vicino ai 10 del Mac, e per s4 quello della H100 (35,2, §7.5). Il risultato è di circa 82 ore, cioè **~3,4 giorni** di calcolo continuo, per circa 4,28 €. Sulla H100 servono invece 3,4 ore e da 11,69 a 32,89 €. Il cloud quindi non fa risparmiare denaro ma tempo, circa 79 ore in cambio di 7–29 € in più, cioè da 0,09 a 0,36 € per ogni ora risparmiata. Nella prima tornata la stima era di ~3,7 giorni e da 0,08 a 0,33 € per ora risparmiata.
+
+### 7.8 s5: tempo di risposta a una domanda
+
+Per verificare l'ipotesi H4 ho misurato s5 con `bench/s5_bench.py`, sull'indice del campione costruito da s4 nella seconda tornata. Lo script pone 20 domande fisse (`bench/s5_questions.txt`), ognuna su un farmaco diverso del campione, e ripete ogni domanda 3 volte. Per ogni domanda misura separatamente i tre passi della ricerca, cioè l'embedding della domanda, la ricerca dei 30 candidati in Chroma e il riordino con il reranker. La risposta del modello linguistico non la misuro, perché passa dalla rete e dall'API di Claude e non dipende dalla macchina. In tabella riporto la mediana delle 60 misure.
+
+| Config | Device | Embedding (ms) | Ricerca (ms) | Reranker (ms) | Totale (ms) | 95° percentile (ms) |
+|---|---|---|---|---|---|---|
+| `local-cpu-v2` | CPU M4 | 44 | 2,6 | 9.660 | 9.709 | 13.841 |
+| `local-mps-v2` | GPU M4 (MPS) | 38 | 9,8 | 4.291 | 4.335 | 5.937 |
+| `cloud-gpu-v2` | H100 | 9,9 | 3,1 | 261 | 274 | 402 |
+| `split-gpu` | H100, corpus completo | 9,9 | 3,6 | 283 | 296 | 474 |
+
+Osservazioni:
+- Quasi tutto il tempo va al reranker, che rilegge le 30 coppie domanda–frammento e occupa dal 95% al 99% del totale. L'embedding della domanda e la ricerca in Chroma insieme restano sotto i 50 ms su tutte le macchine.
+- La H100 risponde in 0,27 s, 16 volte più veloce della GPU del Mac e 35 volte più veloce della sua CPU.
+- Sul Mac per s5 conviene la GPU, 2,2 volte più veloce della CPU, mentre per s4 era il contrario (§7.3).
+- Sul corpus completo l'indice ha 26 volte più frammenti, ma la ricerca in Chroma passa solo da 3,1 a 3,6 ms. Il totale cresce dell'8%, quasi tutto nel reranker, probabilmente perché i candidati sono frammenti più lunghi (§7.5).
+- Nella baseline avevo osservato circa 4,5 s con MPS e 17,7 s su CPU (§3). Con MPS il tempo è lo stesso, mentre su CPU ora è circa la metà. Quella della baseline era una misura informale e con un altro ambiente, quindi non ho indagato la differenza.
+
+Per il costo conta come si usa la GPU. Se la H100 rispondesse a domande senza sosta ne gestirebbe circa 13.000 all'ora, e una domanda costerebbe da 0,026 centesimi (RunPod) a 0,074 centesimi (Azure). Sul Mac con MPS le domande sono circa 830 all'ora, e con 0,0522 €/h (§6.1) una domanda costa 0,006 centesimi. Anche a pieno carico quindi una domanda costa di più sul cloud, da 4 a 12 volte a seconda del fornitore. Nell'uso reale le domande arrivano a intervalli, e una GPU tenuta accesa per rispondere costa da 3,46 a 9,74 € all'ora anche quando nessuno la usa, cioè da 83 a 234 € al giorno.
+
+### 7.9 Un secondo modello di embedding
+
+Il modello di embedding decide come vengono rappresentati i frammenti, e quindi quali candidati arrivano al reranker in s5. Durante la seconda tornata è uscito EmbeddingGemma 2 di Google [19], e ho voluto vedere quanto cambiano tempo, spazio e qualità della ricerca cambiando solo il modello di embedding. Ho tenuto fermo tutto il resto, cioè gli stessi Markdown, la stessa divisione in frammenti, lo stesso reranker e le stesse domande di s5.
+
+```
+                                         ┌─> bge-m3 ───────────> Chroma A ─┐
+Markdown (s3) ──> frammenti (s4) ────────┤                                 ├─> s5: 30 candidati ──> reranker ──> 6 frammenti
+                                         └─> EmbeddingGemma 2 ─> Chroma B ─┘
+```
+
+| | bge-m3 | EmbeddingGemma 2 |
+|---|---|---|
+| Parametri | 568 milioni | 744 milioni |
+| Dimensione del vettore | 1.024 | 768 |
+| Precisione con cui viene caricato | fp32 | bf16 |
+| Prefisso aggiunto al testo | nessuno | `task: search result \| query: ` per la domanda, `title: none \| text: ` per il frammento |
+
+Per poter cambiare modello ho reso il modello di embedding una variabile (`EMBED_MODEL` in `rag/config.py`), e s4 e s5 ora chiamano `encode_document` e `encode_query`, che aggiungono il prefisso giusto per ogni modello. EmbeddingGemma 2 richiede versioni di transformers e sentence-transformers più recenti di quelle fissate in `rag/constraints.txt`, quindi ho eseguito entrambi i modelli in un ambiente separato sulla VM con la H100, con la stessa versione di PyTorch.
+
+Per la qualità, ogni domanda di s5 riguarda un farmaco preciso, e controllo due cose. La prima è se tra i 30 candidati c'è almeno un frammento di quel farmaco, la seconda è quanti dei 6 frammenti rimasti dopo il reranker sono di quel farmaco. Aggiungo una terza misura, che non dipende dalle domande. Rappresento ogni documento con la media dei vettori dei suoi frammenti, prendo i suoi 10 documenti più simili escludendo l'altro documento dello stesso farmaco, e conto quanti appartengono alla stessa classe ATC di primo livello (per esempio sistema nervoso o antimicrobici). Un valore più alto vuol dire che il modello mette vicini i farmaci della stessa area terapeutica.
+
+| | bge-m3, campione | Gemma 2, campione | bge-m3, completo | Gemma 2, completo |
+|---|---|---|---|---|
+| s4 (s) | 277 | 134 | 9.756 | 4.540 |
+| Indice Chroma | 407 MB | 376 MB | 11.763 MB | 10.972 MB |
+| Farmaco giusto tra i 30 candidati | 19/20 | 20/20 | 17/20 | 19/20 |
+| Frammenti del farmaco giusto tra i 6 finali | 94/120 | 110/120 | 77/120 | 96/120 |
+| Vicini della stessa classe ATC | 29% | 37% | 64% | 74% |
+| s5, embedding della domanda (ms) | 8,8 | 30,8 | 9,0 | 30,6 |
+| s5, totale (ms) | 293 | 279 | 292 | 282 |
+
+Per bge-m3 sul corpus completo uso l'indice di `split-gpu` (§7.6.3), costruito nell'ambiente principale. Sul campione i due ambienti danno con bge-m3 lo stesso tempo di s4 (277 s in entrambi).
+
+Osservazioni:
+- EmbeddingGemma 2 costruisce l'indice in meno della metà del tempo (2,1 volte più veloce sul corpus completo), anche se ha più parametri. Gran parte del vantaggio viene probabilmente dalla precisione, perché Gemma lavora in bf16 e bge-m3 in fp32, e sulla H100 i calcoli in bf16 sono molto più veloci. Il confronto misura quindi i due modelli come vengono caricati di default, non a parità di precisione (§9).
+- I vettori di Gemma sono più piccoli del 25%, ma l'indice solo del 7%, perché Chroma salva anche il testo dei frammenti e i metadati.
+- Gemma trova più spesso il farmaco giusto, e dopo il reranker restano più frammenti del farmaco giusto (96 contro 77 su 120 sul corpus completo). Il reranker è lo stesso, quindi la qualità finale dipende anche dai candidati che riceve dall'embedding.
+- Con il corpus completo la qualità scende per entrambi i modelli, perché ci sono molti più farmaci simili tra cui confondersi, ma Gemma perde meno.
+- Il tempo di risposta di s5 non cambia. L'embedding della domanda con Gemma richiede 31 ms invece di 9, ma il totale dipende quasi solo dal reranker (§7.8).
+- 20 domande sono poche, e la misura dice solo se i frammenti sono del farmaco giusto, non se rispondono alla domanda. I risultati sulla qualità vanno quindi presi come un'indicazione.
+
+Per vedere come i due modelli dispongono i documenti ho costruito una pagina interattiva, [`docs/embedding-space.html`](embedding-space.html), generata da `bench/emb_viz.py` con i vettori esportati da `bench/emb_export.py`. Ogni punto è un documento, la vista 3D usa la PCA e quella 2D t-SNE, e cliccando su un documento si vedono i suoi 10 vicini più simili con i due modelli. Le proiezioni conservano solo una parte della struttura, perché le prime tre componenti della PCA spiegano tra l'11% e il 14% della varianza. Per questo le misure in tabella le calcolo sui vettori originali e non sulle proiezioni.
+
+Per questo progetto EmbeddingGemma 2 sarebbe la scelta migliore sia per il tempo sia per la qualità. Non ho sostituito bge-m3 nella pipeline perché richiede versioni delle librerie diverse da quelle con cui ho eseguito tutte le altre misure.
 
 ---
 
@@ -610,22 +789,22 @@ In questa sezione rispondo alla domanda 4 di §1, cioè da quale dimensione del 
 
 Prima di iniziare le misure, nel piano dell'estensione, avevo formulato quattro ipotesi su come si sarebbero comportate le diverse configurazioni. In questo capitolo le riprendo una per una e le confronto con i risultati del capitolo 7.
 
-**H1. La configurazione eterogenea costa meno della monolitica, impiegando quasi lo stesso tempo.** L'idea era che separando le fasi la GPU venisse pagata solo durante l'embedding. L'ipotesi è **parzialmente confermata**. Lo spreco c'è davvero, perché nel full run la GPU è rimasta ferma per il 54% del tempo (§7.4). Separando s3 e s4 il costo sul corpus completo scende del 10–12%, e se sulla VM CPU si sposta anche il download il risparmio arriva al 45–47% (§7.6). Il tempo però non resta quasi uguale ma cresce del 46%, perché le VM solo CPU disponibili su Chameleon sono molto più lente della VM GPU nella conversione.
+**H1. La configurazione eterogenea costa meno della monolitica, impiegando quasi lo stesso tempo.** L'idea era che separando le fasi la GPU venisse pagata solo durante l'embedding. L'ipotesi è **parzialmente confermata**. Lo spreco c'è davvero, perché nel full run la GPU è rimasta ferma per il 54% del tempo (§7.4). Nella seconda tornata ho eseguito davvero la configurazione eterogenea sul corpus completo. Separando s3 e s4 il costo scende dell'8–10%, contro il 10–12% della stima della prima tornata, e spostando sulla VM CPU anche il download il risparmio arriva al 44–46% (§7.6.2). Il tempo però non resta quasi uguale ma cresce del 63%, contro il 46% stimato, perché le VM solo CPU disponibili su Chameleon sono molto più lente della VM GPU nella conversione, e sul corpus completo lo sono ancora di più di quanto prevedeva la stima (§7.6.3).
 
-**H2. s3 scala quasi linearmente fino a un certo numero di core, poi l'efficienza cala.** Mi aspettavo che oltre una certa soglia aggiungere vCPU servisse sempre meno, per via della lettura da disco e dell'avvio dei processi. Sul cloud l'ipotesi è **confermata**. Fino a 16 worker l'efficienza resta almeno a 0,86, poi scende a 0,71 con 32 e a 0,57 con 48 (§7.2). In locale invece **non è confermata**, perché sul Mac lo scaling si ferma già a 2 worker per un limite della macchina e non del codice (§7.1).
+**H2. s3 scala quasi linearmente fino a un certo numero di core, poi l'efficienza cala.** Mi aspettavo che oltre una certa soglia aggiungere vCPU servisse sempre meno, per via della lettura da disco e dell'avvio dei processi. Sul cloud l'ipotesi è **confermata**. Fino a 16 worker l'efficienza resta almeno a 0,87, poi scende a 0,73 con 32 e a 0,58 con 48 (§7.2), con valori quasi uguali nelle due tornate. In locale all'inizio **non era confermata**, perché sul Mac lo scaling si fermava a 2 worker. La causa però non era la macchina ma i thread interni di onnxruntime, insieme alla memoria occupata da altre applicazioni (§7.1.1). Dopo la correzione anche il Mac conferma l'ipotesi, con un'efficienza di 0,71 fino a 4 worker, cioè finché lavorano i core performance, che poi scende a 0,36 con 10.
 
-**H3. Sotto una certa dimensione del corpus il locale vince, per l'overhead fisso del cloud.** L'idea era che per pochi documenti il tempo per creare e preparare la VM pesasse più del lavoro vero e proprio. Per il tempo l'ipotesi è **confermata**. Sotto circa 30 documenti il Mac finisce prima, per via dei circa 5 minuti di overhead (§5.5), mentre sopra vince la H100 (§7.7). Per il costo il risultato va oltre l'ipotesi, perché in euro il locale vince a ogni dimensione del corpus. Il motivo però non è l'overhead ma il costo per documento, che sul Mac è da 2,6 a 7,2 volte più basso con l'ammortamento su 24 ore al giorno. L'overhead pesa comunque molto sui lavori brevi, perché aumenta del 78% il costo di un run sul campione con la H100 e solo del 2,4% quello sul corpus completo (§7.6).
+**H3. Sotto una certa dimensione del corpus il locale vince, per l'overhead fisso del cloud.** L'idea era che per pochi documenti il tempo per creare e preparare la VM pesasse più del lavoro vero e proprio. Per il tempo l'ipotesi è **confermata**. Sotto circa 25 documenti il Mac finisce prima, per via dei circa 3,5 minuti di overhead (§5.5), mentre sopra vince la H100 (§7.7). Per il costo il risultato va oltre l'ipotesi, perché in euro il locale vince a ogni dimensione del corpus. Il motivo però non è l'overhead ma il costo per documento, che sul Mac è da 2,9 a 8,1 volte più basso con l'ammortamento su 24 ore al giorno. L'overhead pesa comunque molto sui lavori brevi, perché aumenta del 57% il costo di un run sul campione con la H100 e solo dell'1,8% quello sul corpus completo (§7.6).
 
-**H4. Per l'interrogazione (s5) il cloud non conviene.** In locale una domanda richiede circa 4,5 secondi con la GPU del Mac, e gran parte del tempo va al reranker. Una GPU cloud la renderebbe più veloce, ma andrebbe tenuta sempre accesa per rispondere alle domande. Questa ipotesi **non l'ho misurata**, perché in questa fase s5 è rimasta in locale.
+**H4. Per l'interrogazione (s5) il cloud non conviene.** In locale una domanda richiede circa 4,5 secondi con la GPU del Mac, e gran parte del tempo va al reranker. Una GPU cloud la renderebbe più veloce, ma andrebbe tenuta sempre accesa per rispondere alle domande. Nella seconda tornata l'ho misurata, e l'ipotesi è **confermata per il costo ma non per il tempo**. La H100 risponde in 0,27 s, 16 volte più veloce della GPU del Mac (4,3 s), e il reranker occupa dal 95% al 99% del tempo su tutte le macchine (§7.8). In euro però una domanda costa da 4 a 12 volte di più sul cloud anche con la GPU sempre occupata, e con le domande che arrivano a intervalli si paga soprattutto la GPU ferma, da 83 a 234 € al giorno. Per un uso personale come il mio basta il Mac, mentre il cloud serve se la latenza conta o se le domande sono tante.
 
 In sintesi:
 
 | Ipotesi | Esito |
 |---|---|
 | H1, configurazione eterogenea più economica a tempo quasi uguale | parzialmente confermata, costa meno ma impiega di più |
-| H2, s3 scala quasi linearmente e poi l'efficienza cala | confermata sul cloud, non in locale |
-| H3, sotto una certa dimensione del corpus vince il locale | confermata per il tempo (~30 documenti), in euro il locale vince sempre |
-| H4, per s5 il cloud non conviene | non misurata |
+| H2, s3 scala quasi linearmente e poi l'efficienza cala | confermata sul cloud e, dopo la correzione di s3, anche in locale |
+| H3, sotto una certa dimensione del corpus vince il locale | confermata per il tempo (~25 documenti), in euro il locale vince sempre |
+| H4, per s5 il cloud non conviene | confermata per il costo (da 4 a 12 volte più cara per domanda), non per il tempo (16 volte più veloce) |
 
 ---
 
@@ -635,7 +814,7 @@ Nessuna misura è perfetta, e alcune scelte che ho fatto per contenere tempi e c
 
 - **Processori diversi.** Le VM `m1` usano CPU Intel Haswell, il nodo con la H100 un Xeon Platinum 8468 (Sapphire Rapids) e il Mac un Apple M4. Quando confronto s3 tra macchine diverse mescolo quindi il numero di core con la velocità di ogni core. Per questo in §7.2 riporto anche il tempo con un solo worker su ogni macchina, che misura la velocità del singolo core.
 - **Core fisici o virtuali.** La virtualizzazione di Chameleon (KVM) mostra alla VM ogni vCPU come un processore separato, e non dice se dietro c'è un core fisico o un *hyperthread*, cioè metà di un core condiviso con un'altra vCPU. Oltre una certa soglia potrebbero essere hyperthread, e questo abbasserebbe l'efficienza misurata con 32 e 48 worker.
-- **Versioni del software.** In locale uso Python 3.13.4 e PyTorch 2.13.0, sul cloud Python 3.12.3 e PyTorch 2.14.1, e su `cloud-cpu-l` PyTorch 2.15.0. `bootstrap.sh` non fissava la versione di PyTorch, e tra il 28 e il 29/10 ne è uscita una nuova. La differenza può influire su s4 su CPU. Dopo le misure ho fissato PyTorch 2.14.1 in `requirements.txt` e in `bootstrap.sh`, perché è l'ultima versione disponibile sia per macOS sia per Linux con build CPU e CUDA 12.6, così i run futuri usano la stessa versione su ogni macchina.
+- **Versioni del software.** Nella prima tornata in locale usavo Python 3.13.4 e PyTorch 2.13.0, sul cloud Python 3.12.3 e PyTorch 2.14.1, e su `cloud-cpu-l` PyTorch 2.15.0, perché `bootstrap.sh` non fissava la versione di PyTorch e tra il 28 e il 29/10 ne è uscita una nuova. Per questo ho fissato PyTorch 2.14.1, l'ultima versione disponibile sia per macOS sia per Linux con build CPU e CUDA 12.6, ho allineato gli ambienti e ho ripetuto le misure (§4.4). Tra le due tornate i tempi cambiano al massimo del 3,3% per s3 e del 5% per s4, tranne che sulla GPU del Mac (§7.3). Le misure della seconda tornata però girano su VM nuove, quindi non posso separare l'effetto delle versioni da quello di un nodo fisico diverso.
 - **OCR.** L'OCR cambia il testo estratto, non solo il tempo. Tra le serie con e senza OCR 142 documenti su 972 hanno un Markdown diverso, e i chunk passano da 31.905 a 31.365. Il Mac con OCR e il cloud producono invece lo stesso testo (33.719.565 contro 33.720.024 caratteri, con 233 pagine passate all'OCR in entrambi i casi). Le misure di s4 in locale usano i chunk senza OCR, ma la differenza è dell'1,7% e non cambia la velocità in modo apprezzabile.
 - **Rappresentatività del campione.** Il campione sottostima del 25–36% i tempi del corpus completo, come ho mostrato in §7.5.
 - **Misure singole.** Alcune misure le ho eseguite una sola volta perché duravano ore. Sono s4 su CPU e su MPS, il full run, i batch 32 e 128, e s3 con un solo worker sulla VM GPU e su `cloud-cpu-l`.
@@ -643,7 +822,9 @@ Nessuna misura è perfetta, e alcune scelte che ho fatto per contenere tempi e c
 - **Baseline.** La durata di s4 nella baseline (~2,5 h) l'avevo osservata e non misurata. Il confronto con il full run (2 h 44 min, con batch e software diversi) è quindi solo indicativo.
 - **Potenza del Mac.** Per il costo dell'energia uso il consumo massimo dichiarato da Apple, non un consumo misurato.
 - **Prezzi.** Uso i listini commerciali come equivalenti perché Chameleon è gratuito, ma le risorse non sono identiche (virtualizzazione, rete, disco, modello di H100). I prezzi inoltre cambiano nel tempo, per questo ognuno ha la sua data e la sua fonte.
-- **Configurazione eterogenea calcolata.** Non l'ho eseguita davvero, quindi il calcolo ignora il trasferimento dei Markdown dalla VM CPU alla VM GPU (circa 1 GB sul corpus completo). Inoltre il tempo di s3 della VM CPU sul corpus completo è stimato con il rapporto tra corpus e campione misurato sulla VM GPU.
+- **Configurazione eterogenea.** Nella prima tornata l'avevo solo calcolata, ignorando il trasferimento dei Markdown e stimando s3 sul corpus completo con il rapporto tra corpus e campione della VM GPU. Nella seconda l'ho eseguita (§7.6.3), ma i Markdown passano dal Mac, quindi il tempo di trasferimento dipende anche dalla mia connessione. Un trasferimento diretto tra le due VM sarebbe probabilmente più veloce.
+- **s5 senza modello linguistico.** Il tempo di s5 non comprende la risposta del modello linguistico, che dipende dalla rete e dall'API e non dalla macchina.
+- **Modelli di embedding.** Ho confrontato bge-m3 e EmbeddingGemma 2 in un ambiente separato sulla VM GPU, con transformers e sentence-transformers più recenti e con il codice di s4 e s5 modificato ma non ancora nel commit (in `phases.csv` il commit risulta `fc80997-dirty`). bge-m3 lavora in fp32 e EmbeddingGemma 2 in bf16, quindi il vantaggio di tempo dipende anche dalla precisione. La qualità è misurata su sole 20 domande e controlla solo il farmaco dei frammenti (§7.9).
 - **Overhead.** L'ho misurato su una VM CPU di Chameleon e l'ho assunto uguale per la VM GPU. Sui cloud commerciali la creazione di una VM può essere più rapida o più lenta.
 - **Log.** PyMuPDF stampa prima di ogni messaggio un blocco crescente di byte nulli, che portava i log fino a 19 MB per run. Il problema riguarda solo la dimensione dei log e non le misure, e ora `run.sh` filtra quei byte.
 
@@ -653,19 +834,19 @@ Nessuna misura è perfetta, e alcune scelte che ho fatto per contenere tempi e c
 
 Riprendo le cinque domande di §1 e rispondo in base ai risultati.
 
-1. **Quanto costa rendere l'infrastruttura riproducibile?** Poco. Con circa 170 righe tra Makefile e Terraform la VM è raggiungibile in circa 70 secondi invece dei 7 minuti della procedura manuale, ed è pronta per le misure in poco più di 5 minuti. La distruzione libera tutto in circa 20 secondi, senza dimenticare l'IP pubblico. Il tempo che resta è quasi tutto nella configurazione del software (246 s), che un'immagine con l'ambiente già installato ridurrebbe. Sul corpus completo questo overhead vale il 2,4% del costo.
-2. **Qual è la configurazione migliore per ciascuna fase?** Il download (s2) dipende dalla rete e va eseguito sulla macchina più economica. La conversione (s3) vuole molti core e scala quasi linearmente fino a 16 worker, tanto che già 8 vCPU Haswell battono il Mac. L'embedding (s4) vuole la GPU, che è da 30 a 88 volte più veloce delle CPU che ho misurato. L'interrogazione (s5) resta in locale.
-3. **Una VM unica è uno spreco?** Sì, perché la H100 resta ferma per il 54% del full run. Separare solo s3 fa risparmiare poco (10–12%), perché la parte più cara è s4. Separare anche il download fa risparmiare quasi metà del costo (45–47%), al prezzo di un'ora e mezza in più.
-4. **Quando conviene il cloud rispetto alla macchina locale?** In tempo il cloud vince già sopra circa 30 documenti. In euro vince sempre il locale, ma al Mac il corpus completo richiederebbe circa 3,7 giorni. Il cloud quindi vende tempo, a 0,08–0,33 € per ogni ora risparmiata. Per la stessa GPU i fornitori differiscono di quasi 3 volte, e questa scelta pesa più di quella dell'architettura.
-5. **Come scala la conversione da PDF a Markdown con il numero di core?** Sul cloud quasi linearmente fino a 16 worker (efficienza 0,86), poi sempre meno (0,57 con 48). Sul Mac si ferma già a 2 worker.
+1. **Quanto costa rendere l'infrastruttura riproducibile?** Poco. Con circa 170 righe tra Makefile e Terraform la VM è raggiungibile in circa 70 secondi invece dei 7 minuti della procedura manuale, ed è pronta per le misure in circa 3 minuti e mezzo, contro i 5 della prima tornata, prima di installare l'ambiente con uv. La distruzione libera tutto in circa 20 secondi, senza dimenticare l'IP pubblico. Il tempo che resta è quasi tutto nella configurazione del software (circa 145 s), che un'immagine con l'ambiente già installato ridurrebbe. Sul corpus completo questo overhead vale l'1,8% del costo.
+2. **Qual è la configurazione migliore per ciascuna fase?** Il download (s2) dipende dalla rete e va eseguito sulla macchina più economica. La conversione (s3) vuole molti core e scala quasi linearmente fino a 16 worker. Il Mac, dopo la correzione di s3, la esegue in locale quanto una VM da 16 vCPU. L'embedding (s4) vuole la GPU, che è da 29 a 86 volte più veloce delle CPU che ho misurato. L'interrogazione (s5) per un uso personale resta in locale, perché la H100 risponde 16 volte più veloce del Mac ma ogni domanda costa da 4 a 12 volte di più. Il modello di embedding conta quanto la macchina, perché con EmbeddingGemma 2 s4 è 2,1 volte più veloce e la ricerca trova più spesso il farmaco giusto.
+3. **Una VM unica è uno spreco?** Sì, perché la H100 resta ferma per il 54% del full run. Separare solo s3 fa risparmiare poco, l'8–10% misurato eseguendo davvero la configurazione eterogenea, perché la parte più cara è s4. Separare anche il download fa risparmiare quasi metà del costo (44–46%), al prezzo di circa due ore in più.
+4. **Quando conviene il cloud rispetto alla macchina locale?** In tempo il cloud vince già sopra circa 25 documenti. In euro vince sempre il locale, ma al Mac il corpus completo richiederebbe circa 3,4 giorni. Il cloud quindi vende tempo, a 0,09–0,36 € per ogni ora risparmiata. Per la stessa GPU i fornitori differiscono di quasi 3 volte, e questa scelta pesa più di quella dell'architettura.
+5. **Come scala la conversione da PDF a Markdown con il numero di core?** Sul cloud quasi linearmente fino a 16 worker (efficienza 0,87–0,90), poi sempre meno (0,58 con 48). Sul Mac all'inizio si fermava a 2 worker, per i thread interni di onnxruntime e la memoria occupata da altre applicazioni. Dopo la correzione scala bene fino a 4 worker e poi meno, perché i core efficiency sono più lenti, e con 10 worker converte il campione in 308 s, quanto la VM da 16 vCPU.
 
-Dal lavoro ho tratto anche una lezione di metodo. Il campione fisso rende i confronti ripetibili ed economici, ma i primi 500 farmaci non rappresentano bene il corpus e sottostimano i tempi reali del 25–36%. Scelte come la dimensione del batch, che sul campione sembravano chiare, vanno quindi verificate sul carico reale.
+Dal lavoro ho tratto anche una lezione di metodo. Il campione fisso rende i confronti ripetibili ed economici, ma i primi 500 farmaci non rappresentano bene il corpus e sottostimano i tempi reali del 25–36%. Scelte come la dimensione del batch, che sul campione sembravano chiare, vanno quindi verificate sul carico reale. Anche ripetere le misure è servito. Con gli ambienti allineati i tempi delle VM sono cambiati di pochi punti percentuali, mentre il risultato del Mac è cambiato del tutto, e la configurazione eterogenea eseguita davvero è risultata più lenta di quanto prevedeva la stima.
 
 Il lavoro si può estendere in diverse direzioni:
 - creare un'immagine con l'ambiente già installato, per ridurre la configurazione della VM;
-- fissare la versione di PyTorch in `bootstrap.sh`;
-- eseguire davvero la configurazione eterogenea, misurando anche il trasferimento dei Markdown tra le due VM;
-- misurare s5 sul cloud, per verificare l'ipotesi H4.
+- trasferire i Markdown direttamente tra le due VM della configurazione eterogenea, senza passare dal Mac;
+- confrontare i modelli di embedding a parità di precisione e con più domande, giudicando a mano se i frammenti rispondono;
+- portare EmbeddingGemma 2 nella pipeline principale, aggiornando le librerie su tutte le macchine.
 
 ---
 
@@ -679,6 +860,7 @@ for w in 1 2 4 8 10; do for r in 1 2 3; do
 done; done
 CONFIG=local-cpu DEVICE=cpu bench/run.sh samples/n500          # s3 + s4 su CPU
 CONFIG=local-mps DEVICE=mps bench/run.sh samples/n500          # s3 + s4 su MPS
+CONFIG=local-mps DEVICE=mps .venv/bin/python bench/s5_bench.py results/local-mps/<run_id>/data  # s5
 .venv/bin/python bench/collect.py                              # -> results/all.csv
 .venv/bin/python bench/cost_model.py                           # -> results/costs*.csv
 .venv/bin/python bench/charts.py                               # -> docs/charts/*.png
@@ -727,3 +909,6 @@ make lease up deploy bench FLAVOR_ID=<id> LEASE_NAME=<nome> CONFIG=<config>   # 
 14. *cloud-init documentation*. https://cloudinit.readthedocs.io
 15. OpenStack, *Blazar — Resource Reservation Service*. https://docs.openstack.org/blazar/latest/
 16. OpenStack, *OpenStackClient*. https://docs.openstack.org/python-openstackclient/latest/
+17. Astral, *uv*. https://docs.astral.sh/uv/
+18. *ONNX Runtime, Thread management*. https://onnxruntime.ai/docs/performance/tune-performance/threading.html
+19. Google, *EmbeddingGemma 2*. https://huggingface.co/google/embeddinggemma-2

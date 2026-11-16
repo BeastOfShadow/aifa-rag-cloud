@@ -1,0 +1,3 @@
+run_id,config,commit,host,cpus,workers,device,embed_batch,phase,start,end,seconds
+20261031T092229,cloud-cpu-l-v2,fc80997,aifa-cpu-l-v2,16,all,cpu,64,s3,1793438550,1793438876,326
+20261031T092229,cloud-cpu-l-v2,fc80997,aifa-cpu-l-v2,16,all,cpu,64,s4,1793438876,1793453634,14758

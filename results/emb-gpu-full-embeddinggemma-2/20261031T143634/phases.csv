@@ -1,0 +1,2 @@
+run_id,config,commit,host,cpus,workers,device,embed_batch,phase,start,end,seconds
+20261031T143634,emb-gpu-full-embeddinggemma-2,fc80997-dirty,aifa-gpu-v2,48,all,auto,64,s4,1793457394,1793461934,4540

@@ -1,0 +1,377 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>AIFA Drug Document Map</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: strumento a due colonne, mappa a sinistra e pannello di controllo e numeri a destra; una colonna su telefono */
+:root {
+  --bg: #f4f6f5; --surface: #ffffff; --fg: #15201c; --muted: #5a6a64; --line: #dce3e0;
+  --accent: #0e6b59; --point: #b7c2bd;
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a;
+  --font-body: "Public Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1412; --surface: #151d1a; --fg: #e5ebe8; --muted: #9aaaa4; --line: #26332e;
+    --accent: #45b89d; --point: #3b4944;
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1412; --surface: #151d1a; --fg: #e5ebe8; --muted: #9aaaa4; --line: #26332e;
+  --accent: #45b89d; --point: #3b4944;
+  --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font: 15px/1.5 var(--font-body); }
+.wrap { max-width: 1280px; margin: 0 auto; padding-block: 24px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 20px; }
+header { display: grid; gap: 6px; }
+h1 { margin: 0; font-size: 1.6rem; font-weight: 700; letter-spacing: -0.01em; text-wrap: balance; }
+.lede { margin: 0; color: var(--muted); max-width: 68ch; }
+.bar { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.seg button { font: 600 0.85rem var(--font-body); color: var(--muted); background: none; border: 0; padding: 7px 12px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--surface); }
+.seg button:focus-visible, .chip:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
+@media (max-width: 860px) { .main { grid-template-columns: minmax(0, 1fr); } }
+#plot { height: min(72vh, 680px); min-height: 380px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+aside { display: grid; gap: 18px; min-width: 0; }
+.panel { display: grid; gap: 8px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font: 0.8rem var(--font-body); color: var(--fg);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; cursor: pointer; }
+.chip .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--point); }
+.chip[aria-pressed="true"] { border-color: var(--fg); }
+.chip .n { color: var(--muted); font-family: var(--font-mono); font-size: 0.72rem; }
+input[type="search"] { width: 100%; box-sizing: border-box; font: 0.9rem var(--font-body); color: var(--fg);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.hint { font-size: 0.8rem; color: var(--muted); margin: 0; }
+table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); vertical-align: top; }
+td.num, th.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+th { font-weight: 600; color: var(--muted); }
+th.cur { color: var(--fg); }
+.focus-title { margin: 0 0 6px; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.doclinks { display: flex; gap: 14px; margin: 0 0 8px; }
+dialog#doc { width: min(860px, 94vw); max-height: 88vh; padding: 0; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--surface); color: var(--fg); }
+dialog#doc::backdrop { background: rgb(0 0 0 / 0.5); }
+.dochead { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; padding: 14px 20px;
+  border-bottom: 1px solid var(--line); }
+.md { overflow: auto; max-height: calc(88vh - 56px); padding: 8px 24px 24px; font-size: 0.95rem; line-height: 1.6; }
+.md h1, .md h2, .md h3, .md h4 { line-height: 1.3; margin: 1.2em 0 0.4em; }
+.md h1 { font-size: 1.3rem; } .md h2 { font-size: 1.15rem; } .md h3, .md h4 { font-size: 1rem; }
+.md p, .md ul, .md ol { margin: 0 0 0.7em; }
+.md table { border-collapse: collapse; margin: 0 0 1em; font-size: 0.85rem; }
+.md th, .md td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; vertical-align: top; }
+.md img { max-width: 100%; }
+.md mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: inherit; }
+.linkbtn { font: 0.8rem var(--font-body); color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
+.nblist { margin: 0; padding-left: 1.4em; display: grid; gap: 2px; font-size: 0.82rem; }
+.nblist button { all: unset; cursor: pointer; display: flex; justify-content: space-between; gap: 8px; width: 100%; }
+.nblist button:hover .nm, .nblist button:focus-visible .nm { text-decoration: underline; }
+.nblist button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.nblist .sim { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--muted); }
+.nblist .both { color: var(--accent); font-weight: 600; }
+.notes { display: grid; gap: 6px; font-size: 0.85rem; color: var(--muted); max-width: 90ch; }
+.notes p { margin: 0; }
+code { font-family: var(--font-mono); font-size: 0.85em; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>AIFA drug document map</h1>
+    <p class="lede" id="lede"></p>
+  </header>
+
+  <div class="bar" role="group" aria-label="Map options">
+    <div class="seg" id="corpus" aria-label="Corpus"></div>
+    <div class="seg" id="model" aria-label="Embedding model"></div>
+    <div class="seg" id="view" aria-label="View">
+      <button type="button" data-v="3d">3D galaxy</button>
+      <button type="button" data-v="2d">2D clusters</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div id="plot" role="img" aria-label="Map of the documents in the embedding space"></div>
+    <aside>
+      <div class="panel">
+        <span class="label">ATC classes to color, up to 3</span>
+        <div class="chips" id="groups"></div>
+      </div>
+      <div class="panel">
+        <label class="label" for="q">Find a drug</label>
+        <input type="search" id="q" list="names" placeholder="e.g. Rinazina" autocomplete="off">
+        <datalist id="names"></datalist>
+        <p class="hint" id="qinfo">Highlights the patient leaflet (FI) and the summary of product characteristics (RCP).</p>
+      </div>
+      <div class="panel">
+        <span class="label">Nearest neighbors</span>
+        <p class="hint" id="focushint">Click a point to see the 10 documents the model considers most similar.</p>
+        <div id="focus" hidden>
+          <p class="focus-title"><b id="focusname"></b> <button type="button" class="linkbtn" id="clearfocus">Close</button></p>
+          <p class="doclinks"><button type="button" class="linkbtn" id="opentext">Open text</button>
+            <a class="linkbtn" id="openaifa" target="_blank" rel="noopener">Download PDF (AIFA)</a></p>
+          <ol class="nblist" id="nblist"></ol>
+          <p class="hint" id="overlap"></p>
+        </div>
+      </div>
+      <div class="panel">
+        <span class="label">Embedder comparison</span>
+        <table id="stats"></table>
+      </div>
+    </aside>
+  </div>
+
+  <div class="notes">
+    <p id="viewnote"></p>
+    <p><b>Same-class neighbors</b>: for each document I take the 10 most similar ones, leaving out the other document of the same drug, and count how many share its first-level ATC class. The higher it is, the more the model places drugs with the same use close together.</p>
+    <p><b>Nearest neighbors</b>: they are computed in the model's original space, not on the map, so a neighbor can look far away in the projection. They are the documents that retrieval considers closest.</p>
+    <p><b>Right chunks in s5</b>: over 20 questions about specific drugs, how many of the 6 chunks kept after reranking come from the drug asked about.</p>
+    <p>AIFA data (CC BY 4.0). Each point is the mean of the chunk vectors of one document. Generated by <code>bench/emb_viz.py</code>.</p>
+  </div>
+</div>
+<dialog id="doc" aria-labelledby="docname">
+  <div class="dochead"><b id="docname"></b> <button type="button" class="linkbtn" id="closedoc">Close</button></div>
+  <div class="md" id="doctext"></div>
+</dialog>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/3.5.1/plotly.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/18.0.10/lib/marked.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.4.10/purify.min.js"></script>
+<script id="emb-data" type="application/json">__DATA__</script>
+<script>
+const D = JSON.parse(document.getElementById("emb-data").textContent);
+const SLOTS = ["--series-1", "--series-2", "--series-3"];
+const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmt = (n) => n.toLocaleString("en-US");
+const corpusKeys = Object.keys(D.corpora);
+const state = { corpus: corpusKeys.includes("full") ? "full" : corpusKeys[0], model: null, view: "3d",
+                sel: new Map(), q: "", focus: null };   // sel: classe ATC -> slot di colore (il colore segue la classe)
+const nbOf = (m, i) => m.nb.slice(i * 10, i * 10 + 10);
+const label = (meta, i) => `${meta.name[i]} · ${meta.tipo[i]}`;
+// `make map` serve docs/ su localhost con data/md in docs/md: da file:// il browser non legge i file locali
+const SERVED = ["127.0.0.1", "localhost"].includes(location.hostname);
+
+function counts(meta) {
+  const c = {};
+  meta.atc.forEach((a) => { const g = a.slice(0, 1); if (g) c[g] = (c[g] || 0) + 1; });
+  return Object.entries(c).sort((a, b) => b[1] - a[1]);
+}
+
+function segButtons(el, items, key) {
+  el.innerHTML = "";
+  for (const [k, label] of items) {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = label; b.dataset.v = k;
+    b.onclick = () => { state[key] = k; if (key === "corpus") setCorpus(); render(); };
+    el.appendChild(b);
+  }
+}
+
+function setCorpus() {
+  const c = D.corpora[state.corpus];
+  if (!c.models[state.model]) state.model = Object.keys(c.models)[0];
+  segButtons(document.getElementById("model"), Object.entries(c.models).map(([k, m]) => [k, m.label]), "model");
+  const top = counts(c.meta);
+  state.sel = new Map(top.slice(0, 3).map(([g], i) => [g, i]));
+  state.focus = null;
+  document.getElementById("names").innerHTML =
+    [...new Set(c.meta.name)].sort().map((n) => `<option value="${n.replace(/"/g, "&quot;")}">`).join("");
+  document.getElementById("lede").textContent =
+    `Each point is a patient leaflet or a summary of product characteristics: ${fmt(c.meta.name.length)} documents (${c.label.toLowerCase()}). ` +
+    "Nearby documents are the ones the embedding model considers similar, and s5 relies on this closeness to pick the chunks it passes to the reranker.";
+}
+
+function toggleGroup(g) {
+  if (state.sel.has(g)) state.sel.delete(g);
+  else {
+    if (state.sel.size === 3) state.sel.delete(state.sel.keys().next().value);   // esce la più vecchia
+    const used = new Set(state.sel.values());
+    state.sel.set(g, [0, 1, 2].find((s) => !used.has(s)));
+  }
+  render();
+}
+
+function renderGroups(meta) {
+  const el = document.getElementById("groups");
+  el.innerHTML = "";
+  for (const [g, n] of counts(meta)) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "chip"; b.title = D.atc[g] || g;
+    b.setAttribute("aria-pressed", state.sel.has(g));
+    const dot = document.createElement("span"); dot.className = "dot";
+    if (state.sel.has(g)) dot.style.background = css(SLOTS[state.sel.get(g)]);
+    b.append(dot, `${D.atc[g] || g} (${g}) `);
+    const cnt = document.createElement("span"); cnt.className = "n"; cnt.textContent = fmt(n);
+    b.append(cnt);
+    b.onclick = () => toggleGroup(g);
+    el.appendChild(b);
+  }
+}
+
+function renderStats(c) {
+  const ms = Object.entries(c.models);
+  const rows = [
+    ["Vector dimensions", (m) => fmt(m.dim)],
+    ["s4 on the H100", (m) => (m.s4 == null ? "–" : `${fmt(m.s4)} s`)],
+    ["Chroma index", (m) => (m.chroma == null ? "–" : `${fmt(m.chroma)} MB`)],
+    ["Same-class neighbors", (m) => `${(m.knn * 100).toFixed(1)}%`],
+    ["s5, drug among the 30 candidates", (m) => m.found ?? "–"],
+    ["s5, right chunks in the top 6", (m) => m.top ?? "–"],
+  ];
+  const head = `<tr><th></th>${ms.map(([k, m]) => `<th class="num${k === state.model ? " cur" : ""}">${m.label}</th>`).join("")}</tr>`;
+  document.getElementById("stats").innerHTML = head +
+    rows.map(([l, f]) => `<tr><td>${l}</td>${ms.map(([, m]) => `<td class="num">${f(m)}</td>`).join("")}</tr>`).join("");
+}
+
+function renderFocus(c, m) {
+  const f = state.focus, meta = c.meta;
+  document.getElementById("focus").hidden = f == null;
+  document.getElementById("focushint").hidden = f != null;
+  if (f == null) return;
+  const others = Object.entries(c.models).filter(([k]) => k !== state.model);
+  const otherNb = others.length ? new Set(nbOf(others[0][1], f)) : new Set();
+  document.getElementById("focusname").textContent = label(meta, f);
+  // testo: il Markdown di s3 (data/md) c'è solo in locale, dal repo; online resta il PDF su AIFA
+  document.getElementById("opentext").hidden = !(SERVED || location.protocol === "file:") || !meta.md[f];
+  document.getElementById("openaifa").href = "https://api.aifa.gov.it/aifa-bdf-eif-be/1.0.0/organizzazione/" +
+    `${meta.org[f]}/farmaci/${Number(meta.cod[f])}/stampati?ts=${meta.tipo[f]}`;
+  const list = document.getElementById("nblist");
+  list.innerHTML = "";
+  nbOf(m, f).forEach((j, r) => {
+    const li = document.createElement("li"), b = document.createElement("button");
+    b.type = "button";
+    const nm = document.createElement("span"); nm.className = "nm";
+    nm.textContent = label(meta, j);
+    if (otherNb.has(j)) { const s = document.createElement("span"); s.className = "both"; s.textContent = " ●"; s.title = `also a neighbor with ${others[0][1].label}`; nm.append(s); }
+    const sim = document.createElement("span"); sim.className = "sim";
+    sim.textContent = m.ns[f * 10 + r].toFixed(3);
+    b.append(nm, sim);
+    b.onclick = () => { state.focus = j; render(); };
+    li.appendChild(b); list.appendChild(li);
+  });
+  const shared = nbOf(m, f).filter((j) => otherNb.has(j)).length;
+  document.getElementById("overlap").textContent = others.length
+    ? `● = also a neighbor with ${others[0][1].label}: ${shared} of 10. The number is the cosine similarity.`
+    : "The number is the cosine similarity.";
+}
+
+function render() {
+  const c = D.corpora[state.corpus], m = c.models[state.model], meta = c.meta;
+  for (const id of ["corpus", "model", "view"])
+    document.querySelectorAll(`#${id} button`).forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === state[id]));
+  const is3d = state.view === "3d";
+  const q = state.q.trim().toLowerCase();
+  const hit = (i) => q.length > 1 && meta.name[i].toLowerCase().includes(q);
+  const buckets = [{ name: "Other classes", color: css("--point"), size: 3, idx: [] }];
+  const byGroup = {};
+  for (const [g, s] of state.sel) byGroup[g] = buckets.push({ name: D.atc[g], color: css(SLOTS[s]), size: 4, idx: [] }) - 1;
+  const hits = { name: "Search", color: css("--fg"), size: 8, idx: [], label: true };
+  meta.atc.forEach((a, i) => {
+    if (hit(i)) hits.idx.push(i);
+    else buckets[byGroup[a.slice(0, 1)] ?? 0].idx.push(i);
+  });
+  buckets.push(hits);
+  const P = (i) => (is3d ? [m.x[i], m.y[i], m.z[i]] : [m.u[i], m.v[i]]);
+  const extra = [];
+  if (state.focus != null) {   // vista vicini: linee dal documento scelto ai suoi 10 più simili
+    const f = state.focus, nb = nbOf(m, f), line = [[], [], []];
+    for (const j of nb) [P(f), P(j), [null, null, null]].forEach((p) => p.forEach((v, d) => line[d].push(v)));
+    extra.push({ name: "Neighbors", idx: [], lines: line });
+    buckets.push({ name: "Neighbors", color: css("--fg"), size: 6, idx: nb });
+    buckets.push({ name: "Selected document", color: css("--accent"), size: 11, idx: [f], label: true });
+  }
+  const small = meta.name.length > 5000 ? 0.6 : 1;
+  const lineTraces = extra.map((e) => {
+    const t = { type: is3d ? "scatter3d" : "scattergl", mode: "lines", hoverinfo: "skip",
+                x: e.lines[0], y: e.lines[1], line: { color: css("--fg"), width: 1.5 } };
+    if (is3d) t.z = e.lines[2];
+    return t;
+  });
+  const traces = lineTraces.concat(buckets.filter((b) => b.idx.length).map((b) => {
+    const t = {
+      type: is3d ? "scatter3d" : "scattergl", name: b.name, hoverinfo: "text", customdata: b.idx,
+      mode: "markers",
+      x: b.idx.map((i) => (is3d ? m.x : m.u)[i]), y: b.idx.map((i) => (is3d ? m.y : m.v)[i]),
+      text: b.idx.map((i) => `${meta.name[i]} · ${meta.tipo[i]} · ATC ${meta.atc[i] || "n/a"}`),
+      marker: { size: b.size * (b.label ? 1 : small) * (is3d ? 1 : 1.6), color: b.color,
+                opacity: b.label ? 1 : 0.85, line: { width: 0 } },
+    };
+    if (b.label) t.text = b.idx.map((i) => `${meta.name[i]} ${meta.tipo[i]}`);
+    if (is3d) t.z = b.idx.map((i) => m.z[i]);
+    return t;
+  }));
+  // etichette come annotazioni (SVG), non come testo WebGL dei punti: in plotly 3.0.1 quel testo va in errore e blocca il grafico
+  const labels = buckets.filter((b) => b.label && b.idx.length <= 12).flatMap((b) => b.idx.map((i) => {
+    const [x, y, z] = P(i);
+    return { x, y, z, text: `${meta.name[i]} ${meta.tipo[i]}`, showarrow: false, yshift: 12,
+             font: { color: css("--fg"), size: 11 } };
+  }));
+  const ax = { showticklabels: false, title: { text: "" }, zeroline: false, showspikes: false,
+               gridcolor: css("--line"), showbackground: false, color: css("--muted") };
+  // inquadratura attuale del 3D: dopo lo zoom quella nel layout arriva in ritardo e il ridisegno la riporterebbe indietro
+  const camera = is3d ? document.getElementById("plot")._fullLayout?.scene?._scene?.getCamera() : undefined;
+  Plotly.react("plot", traces, {
+    paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)", showlegend: false,
+    margin: { l: 0, r: 0, t: 0, b: 0 }, font: { family: css("--font-body"), color: css("--muted") },
+    hoverlabel: { bgcolor: css("--surface"), bordercolor: css("--line"), font: { color: css("--fg") } },
+    scene: { xaxis: ax, yaxis: ax, zaxis: ax, bgcolor: "rgba(0,0,0,0)", annotations: is3d ? labels : [], camera },
+    xaxis: { ...ax, showgrid: false }, yaxis: { ...ax, showgrid: false }, annotations: is3d ? [] : labels,
+    uirevision: `${state.corpus}-${state.model}-${state.view}`,
+  }, { displayModeBar: false, responsive: true });
+  renderGroups(meta);
+  renderStats(c);
+  renderFocus(c, m);
+  document.getElementById("qinfo").textContent = q.length > 1
+    ? (hits.idx.length ? `${hits.idx.length} documents found.` : "No document with this name.")
+    : "Highlights the patient leaflet (FI) and the summary of product characteristics (RCP).";
+  document.getElementById("viewnote").innerHTML = is3d
+    ? `<b>3D galaxy</b>: PCA projection, as in Cosmind. It keeps ${(m.var3d * 100).toFixed(1)}% of the variance of the ${m.dim}-dimensional vectors, so it shows the overall shape but flattens many details. Drag to rotate.`
+    : "<b>2D clusters</b>: t-SNE projection, which keeps similar documents close together. Distances between far-apart clusters and cluster sizes carry no meaning.";
+}
+
+segButtons(document.getElementById("corpus"), corpusKeys.map((k) => [k, D.corpora[k].label]), "corpus");
+document.querySelectorAll("#view button").forEach((b) => (b.onclick = () => { state.view = b.dataset.v; render(); }));
+document.getElementById("q").addEventListener("input", (e) => { state.q = e.target.value; render(); });
+document.getElementById("clearfocus").onclick = () => { state.focus = null; render(); };
+const doc = document.getElementById("doc"), docText = document.getElementById("doctext");
+document.getElementById("opentext").onclick = async () => {
+  const meta = D.corpora[state.corpus].meta, f = state.focus;
+  document.getElementById("docname").textContent = label(meta, f);
+  docText.innerHTML = SERVED ? "<p>Loading…</p>"
+    : "<p>To read the text here, open the map with <code>make map</code>: from <code>file://</code> the browser cannot read local files.</p>";
+  doc.showModal();
+  if (!SERVED) return;
+  const r = await fetch(`md/${meta.cod[f]}_${meta.tipo[f]}.md`);
+  // testo convertito dai PDF: lo pulisco prima di inserirlo nella pagina
+  // s3 scrive ogni sezione su una riga con il titolo in grassetto: vado a capo prima dei titoli che seguono una frase
+  // (non nelle righe delle tabelle, che spezzerebbe)
+  const md = r.ok && (await r.text()).split("\n")
+    .map((l) => (l.startsWith("|") ? l : l.replace(/([.:;)]) \*\*(?=\S)/g, "$1\n\n**"))).join("\n");
+  docText.innerHTML = r.ok ? DOMPurify.sanitize(marked.parse(md)) : `<p>Text not found (${r.status}).</p>`;
+  docText.scrollTop = 0;
+};
+document.getElementById("closedoc").onclick = () => doc.close();
+doc.addEventListener("click", (e) => { if (e.target === doc) doc.close(); });   // clic fuori dalla finestra
+setCorpus();
+render();
+// in 3D plotly emette il clic mentre ridisegna la scena: render() dentro l'evento ridisegna, riemette il clic
+// e si richiama all'infinito (pagina bloccata). Quindi ridisegno fuori dall'evento e solo se il punto cambia
+document.getElementById("plot").on("plotly_click", (e) => {
+  const p = e.points.find((p) => p.customdata != null);
+  if (p && p.customdata !== state.focus) { state.focus = p.customdata; setTimeout(render); }
+});
+// il tema cambia i colori letti dalle variabili CSS: ridisegna
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
+new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+</script>

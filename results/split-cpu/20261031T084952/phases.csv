@@ -1,0 +1,2 @@
+run_id,config,commit,host,cpus,workers,device,embed_batch,phase,start,end,seconds
+20261031T084952,split-cpu,fc80997,aifa-cpu-l,16,16,auto,64,s3,1793436592,1793446018,9426
