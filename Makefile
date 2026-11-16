@@ -41,7 +41,7 @@ REMOTE         = cc@$(shell $(TF) output -raw ip 2>/dev/null)
 # Appends "<target>,start,end,seconds"; the recipe must set t0 first
 LOG_TIME       = t1=$$(date +%s) && { test -f $(TIMES) || echo "target,start,end,seconds" > $(TIMES); } && echo "$@,$$t0,$$t1,$$((t1-t0))" >> $(TIMES)
 
-.PHONY: lease up deploy bench fetch fetch-md push-md down ssh map conv-push conv-fetch
+.PHONY: lease up deploy bench fetch fetch-md push-md down ssh map
 
 # Reserve the flavor and wait until the lease is ACTIVE.
 # date -v is BSD/macOS syntax (GNU/Linux: date -d "+N hours")
@@ -147,14 +147,3 @@ map:
 	ln -sfn ../data/md docs/md
 	(sleep 1 && python3 -m webbrowser -t http://127.0.0.1:8000/embedding-space.html) &
 	python3 -m http.server 8000 --bind 127.0.0.1 -d docs
-
-# New conversion pipeline (conv/README.md), on a GPU VM started with PLAN=conv/plan_bakeoff.sh:
-# the PDFs of the gold set (conv/gold.csv, columns cod and tipo) to the VM, then the converter outputs back
-conv-push:
-	@$(SSH) $(REMOTE) 'mkdir -p $(REPO)/conv/data/pdf_gold' && \
-	tail -n +2 conv/gold.csv | cut -d, -f3,4 | tr , _ | sed 's/$$/.pdf/' | \
-	rsync -a -e "$(SSH)" --files-from=- conv/data/pdf/ $(REMOTE):$(REPO)/conv/data/pdf_gold/
-
-# conv/out on the VM is a link to the volume, hence -L
-conv-fetch:
-	@rsync -aL -e "$(SSH)" $(REMOTE):$(REPO)/conv/out/ conv/out/

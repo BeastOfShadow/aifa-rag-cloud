@@ -183,7 +183,7 @@ make fetch down                # copy results to results/<config>/, destroy VM a
 - [docs/RELAZIONE.md](docs/RELAZIONE.md) — the report (Italian): method, manual vs IaC provisioning,
   results, cost model, limitations.
 - [docs/embedding-space.html](docs/embedding-space.html) — interactive map of the embedding space (see above).
-- [conv/](conv/README.md) — work in progress after the exam: a faithful PDF to Markdown conversion, sections and corpus vocabulary.
+- [aifa-drug-research](https://github.com/BeastOfShadow/aifa-drug-research) — the work after the exam (faithful PDF to Markdown conversion, sections, vocabulary, embeddings), moved out of this repo with its history; tag `esame-v1` is the last state with `conv/` here.
 - [APPROFONDIMENTO_IAC.md](APPROFONDIMENTO_IAC.md) — the original plan of the cloud extension.
 - [LAVORO_SVOLTO.md](LAVORO_SVOLTO.md) — log of the first version (baseline v0).
 

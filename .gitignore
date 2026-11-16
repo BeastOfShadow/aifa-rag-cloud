@@ -16,9 +16,3 @@ results/*/*/data/
 /*.pdf
 /*.log
 results/*/*/vectors.npz
-
-# pipeline di conversione nuova (conv/): PDF, Markdown e JSON, troppo grandi per il repo
-conv/data/
-conv/out/
-conv/out-vgpu/
-conv/docs/vocabulary.html
